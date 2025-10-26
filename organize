@@ -1,0 +1,496 @@
+#!/usr/bin/env python3
+"""
+🧙‍♂️ The Magical File Organizer CLI
+Because typing SORT@Desktop is way cooler than a 50-character terminal command!
+
+Usage:
+    organize SORT@Desktop              # Sort Desktop by file type
+    organize TAG@/path/to/folder       # AI tag all files in folder
+    organize FIND@"invoice"            # Search for files
+    organize CLEAN@Downloads           # Organize Downloads
+    organize GRAPH@ProjectName         # Show project relationships
+    organize SIMILAR@file.pdf          # Find similar files
+    organize WHEN@"yesterday"          # Files from yesterday
+    organize STATS                     # Show statistics
+    organize EXPORT                    # Export to all formats
+    organize HELP                      # This help
+
+Shortcuts:
+    organize @Desktop    = SORT@Desktop
+    organize @Downloads  = SORT@Downloads
+    organize ?invoice    = FIND@invoice
+"""
+
+import sys
+import os
+from datetime import datetime, timedelta
+
+# Add current directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from file_indexer import FileDatabase, FileIndexer
+from file_operations import FileOperations
+from ai_tagger import AITagger
+from vector_store import VectorSearchIntegration
+from graph_store import FileGraphIntegration
+from export_manager import ExportManager
+from temporal_tracker import TemporalTracker
+from setup_wizard import load_user_profile
+from pathlib import Path
+
+# NEW MODULES! 🎉
+from duplicate_detector import DuplicateDetector
+from ocr_processor import OCRProcessor
+from smart_folders import SmartFolders
+from trash_manager import TrashManager
+from reminder_system import ReminderSystem
+from bulk_operations import BulkOperations
+from aging_manager import AgingManager
+from screenshot_manager import ScreenshotManager
+from suggestions_engine import SuggestionsEngine
+
+
+class MagicalCLI:
+    """The quasi-cheesy but super useful CLI"""
+    
+    def __init__(self):
+        self.db = FileDatabase()
+        self.ops = FileOperations(self.db)
+        self.temporal = TemporalTracker(self.db)
+        self.profile = load_user_profile() or {}
+        
+        # Fun messages
+        self.sparkles = "✨"
+        self.rocket = "🚀"
+        self.magic = "🧙‍♂️"
+        self.party = "🎉"
+    
+    def parse_command(self, arg):
+        """Parse the cheesy command syntax"""
+        arg = arg.strip()
+        
+        # Shortcuts
+        if arg.startswith('@'):
+            # @Desktop = SORT@Desktop
+            return 'SORT', arg[1:]
+        
+        if arg.startswith('?'):
+            # ?invoice = FIND@invoice
+            return 'FIND', arg[1:].strip('"\'')
+        
+        if arg.startswith('!'):
+            # !yesterday = WHEN@yesterday
+            return 'WHEN', arg[1:].strip('"\'')
+        
+        # Full commands
+        if '@' in arg:
+            cmd, target = arg.split('@', 1)
+            return cmd.upper(), target.strip('"\'')
+        
+        # Single word commands
+        return arg.upper(), None
+    
+    def run(self, command_str):
+        """Execute the magical command"""
+        try:
+            cmd, target = self.parse_command(command_str)
+            
+            if cmd == 'SORT' or cmd == 'CLEAN':
+                return self.sort_folder(target)
+            
+            elif cmd == 'TAG':
+                return self.tag_folder(target)
+            
+            elif cmd == 'FIND' or cmd == 'SEARCH':
+                return self.find_files(target)
+            
+            elif cmd == 'GRAPH':
+                return self.show_graph(target)
+            
+            elif cmd == 'SIMILAR':
+                return self.find_similar(target)
+            
+            elif cmd == 'STATS':
+                return self.show_stats()
+            
+            elif cmd == 'EXPORT':
+                return self.export_index()
+            
+            elif cmd == 'WHEN' or cmd == 'TIME':
+                return self.temporal_query(target)
+            
+            # NEW FEATURES! 🎉
+            elif cmd == 'DUPES' or cmd == 'DUPLICATES':
+                return self.find_duplicates(target)
+            
+            elif cmd == 'OCR':
+                return self.ocr_folder(target)
+            
+            elif cmd == 'SMART':
+                return self.show_smart_folders(target)
+            
+            elif cmd == 'TRASH' or cmd == 'UNDELETE':
+                return self.trash_operations(target)
+            
+            elif cmd == 'REMIND' or cmd == 'NUDGE':
+                return self.show_reminders(target)
+            
+            elif cmd == 'BULK':
+                return self.bulk_operations(target)
+            
+            elif cmd == 'AGING' or cmd == 'ARCHIVE':
+                return self.aging_operations(target)
+            
+            elif cmd == 'SCREENSHOTS':
+                return self.screenshot_operations(target)
+            
+            elif cmd == 'SUGGEST' or cmd == 'SUGGESTIONS':
+                return self.show_suggestions()
+            
+            elif cmd == 'VIZ' or cmd == 'VISUALIZE':
+                return self.show_visualizer(target)
+            
+            elif cmd == 'WATCH':
+                return self.file_watcher_control(target)
+            
+            elif cmd == 'HIDE':
+                return self.hide_file(target)
+            
+            elif cmd == 'HELP' or cmd == '--HELP' or cmd == '-H':
+                return self.show_help()
+            
+            else:
+                print(f"❌ Unknown command: {cmd}")
+                print(f"💡 Try: organize HELP")
+                return 1
+        
+        except Exception as e:
+            print(f"\n❌ Oops! Something went wrong: {e}")
+            print(f"💡 Try: organize HELP")
+            return 1
+        finally:
+            self.db.close()
+    
+    def sort_folder(self, target):
+        """SORT@folder - Organize files by type"""
+        # Expand common names
+        folder_map = {
+            'Desktop': '~/Desktop',
+            'Downloads': '~/Downloads',
+            'Documents': '~/Documents',
+            'Pictures': '~/Pictures'
+        }
+        
+        folder = folder_map.get(target, target)
+        folder = os.path.expanduser(folder)
+        
+        if not os.path.exists(folder):
+            print(f"❌ Folder not found: {folder}")
+            return 1
+        
+        print(f"\n{self.magic} Sorting {Path(folder).name}...")
+        print(f"   Organizing files by type...\n")
+        
+        results = self.ops.organize_by_type(folder)
+        
+        print(f"\n{self.party} Done!")
+        print(f"   {self.sparkles} Moved: {results['moved']} files")
+        print(f"   ⏭️  Skipped: {results['skipped']} files")
+        
+        if results['errors']:
+            print(f"   ⚠️  Errors: {len(results['errors'])}")
+        
+        return 0
+    
+    def tag_folder(self, target):
+        """TAG@folder - AI tag all files"""
+        folder = os.path.expanduser(target)
+        
+        if not os.path.exists(folder):
+            print(f"❌ Folder not found: {folder}")
+            return 1
+        
+        print(f"\n{self.magic} Tagging files in {Path(folder).name}...")
+        
+        # First, index the folder
+        indexer = FileIndexer(self.db)
+        indexed, skipped = indexer.scan_folder(folder, recursive=False)
+        
+        print(f"   📁 Indexed: {indexed} files")
+        
+        # Then tag with AI
+        tagger = AITagger(user_profile=self.profile)
+        tagged = tagger.tag_untagged_files(self.db, limit=50)
+        
+        print(f"\n{self.party} Done!")
+        print(f"   {self.sparkles} Tagged: {tagged} files with AI")
+        
+        return 0
+    
+    def find_files(self, query):
+        """FIND@query - Search for files"""
+        if not query:
+            print("❌ Please provide a search query")
+            print("💡 Example: organize FIND@invoice")
+            return 1
+        
+        print(f"\n🔍 Searching for: '{query}'...")
+        
+        results = self.db.search_files(query, limit=20)
+        
+        if not results:
+            print(f"\n❌ No files found matching '{query}'")
+            print(f"💡 Try: organize TAG@folder (to index more files)")
+            return 1
+        
+        print(f"\n{self.sparkles} Found {len(results)} files:\n")
+        
+        for i, r in enumerate(results[:10], 1):
+            print(f"   {i}. {r['filename']}")
+            if r['ai_summary']:
+                print(f"      {r['ai_summary'][:60]}...")
+            print(f"      📁 {Path(r['folder_location']).name}")
+            print()
+        
+        if len(results) > 10:
+            print(f"   ... and {len(results) - 10} more files")
+        
+        return 0
+    
+    def show_graph(self, project):
+        """GRAPH@project - Show project relationships"""
+        if not project:
+            print("❌ Please provide a project name")
+            print("💡 Example: organize GRAPH@ClientX")
+            return 1
+        
+        print(f"\n🕸️  Analyzing relationships for '{project}'...\n")
+        
+        graph = FileGraphIntegration(self.db)
+        graph.build_graph_from_database()
+        
+        files = graph.find_all_project_files(project)
+        
+        if not files:
+            print(f"❌ No files found for project '{project}'")
+            return 1
+        
+        print(f"{self.sparkles} Found {len(files)} files:\n")
+        
+        for i, f in enumerate(files[:10], 1):
+            print(f"   {i}. {f['filename']}")
+            if f.get('summary'):
+                print(f"      {f['summary'][:60]}...")
+            print()
+        
+        if len(files) > 10:
+            print(f"   ... and {len(files) - 10} more files")
+        
+        return 0
+    
+    def find_similar(self, target):
+        """SIMILAR@file - Find similar files"""
+        target = os.path.expanduser(target)
+        
+        if not os.path.exists(target):
+            print(f"❌ File not found: {target}")
+            return 1
+        
+        print(f"\n🔍 Finding files similar to {Path(target).name}...\n")
+        
+        vs = VectorSearchIntegration(self.db)
+        similar = vs.find_related_files(target, top_k=5)
+        
+        if not similar:
+            print(f"❌ No similar files found")
+            print(f"💡 Try: organize TAG@folder (to index more files)")
+            return 1
+        
+        print(f"{self.sparkles} Similar files:\n")
+        
+        for i, f in enumerate(similar, 1):
+            print(f"   {i}. {f['filename']} (similarity: {f['similarity']:.2f})")
+            if f.get('ai_summary'):
+                print(f"      {f['ai_summary'][:60]}...")
+            print()
+        
+        return 0
+    
+    def show_stats(self):
+        """STATS - Show database statistics"""
+        stats = self.db.get_stats()
+        
+        print(f"\n📊 File Organizer Statistics\n")
+        print(f"   📁 Total Files: {stats['total_files']}")
+        print(f"   📂 Folders: {len(stats.get('by_folder', {}))}")
+        print(f"   📄 File Types: {len(stats.get('by_extension', {}))}")
+        
+        if stats.get('top_tags'):
+            print(f"\n   🏷️  Top Tags:")
+            for tag, count in list(stats['top_tags'].items())[:5]:
+                print(f"      • {tag}: {count}")
+        
+        # Learned patterns
+        patterns = self.db.get_learned_patterns(min_confidence=0.5)
+        if patterns:
+            print(f"\n   🧠 Learned {len(patterns)} patterns")
+        
+        print()
+        return 0
+    
+    def export_index(self):
+        """EXPORT - Export file index"""
+        print(f"\n{self.rocket} Exporting file index...\n")
+        
+        exporter = ExportManager(self.db)
+        results = exporter.export_all_formats()
+        
+        print(f"\n{self.party} Exported to 4 formats!")
+        print(f"\n   📍 Location: ~/.fileorganizer/exports/\n")
+        
+        for format_name, info in results.items():
+            print(f"   • {format_name.upper()}: {Path(info['path']).name}")
+        
+        print(f"\n💡 Open HTML: open ~/.fileorganizer/exports/*.html")
+        print()
+        
+        return 0
+    
+    def temporal_query(self, query):
+        """WHEN@query or !query - Temporal file queries"""
+        if not query:
+            print("❌ Please provide a time expression")
+            print("💡 Examples:")
+            print("   organize !yesterday")
+            print("   organize WHEN@'last week'")
+            return 1
+        
+        print(f"\n⏰ Searching for files from '{query}'...\n")
+        
+        results, start, end = self.temporal.query_files_by_time(query)
+        
+        if not results:
+            print(f"❌ No files found from that time period")
+            return 1
+        
+        # Format time range
+        time_desc = self._format_time_range(start, end)
+        
+        print(f"{self.sparkles} Found {len(results)} files from {time_desc}:\n")
+        
+        for i, item in enumerate(results[:15], 1):
+            print(f"   {i}. {item['filename']}")
+            print(f"      📁 {item['location']}")
+            timestamp = item['timestamp'][:16].replace('T', ' ')
+            print(f"      🕐 {timestamp}")
+            if item.get('summary'):
+                print(f"      💡 {item['summary'][:60]}...")
+            print()
+        
+        if len(results) > 15:
+            print(f"   ... and {len(results) - 15} more files")
+        
+        print()
+        return 0
+    
+    def _format_time_range(self, start, end):
+        """Format time range nicely"""
+        now = datetime.now()
+        
+        if start.date() == end.date():
+            if start.date() == now.date():
+                return "today"
+            elif start.date() == (now - timedelta(days=1)).date():
+                return "yesterday"
+            return start.strftime("%B %d")
+        
+        diff = (now - start).days
+        if diff <= 7:
+            return f"the last {diff} days"
+        
+        return f"{start.strftime('%b %d')} to {end.strftime('%b %d')}"
+    
+    def show_help(self):
+        """Show help message"""
+        help_text = f"""
+{self.magic} The Magical File Organizer CLI {self.sparkles}
+
+BASIC COMMANDS (The Cheesy Ones):
+    
+    organize SORT@Desktop          {self.sparkles} Sort Desktop by file type
+    organize CLEAN@Downloads       {self.sparkles} Clean up Downloads folder
+    organize TAG@/path/to/folder   {self.sparkles} AI tag all files in folder
+    organize FIND@"invoice"        🔍 Search for files
+    organize WHEN@"yesterday"      ⏰ Files from yesterday
+    organize GRAPH@ProjectName     🕸️  Show project relationships
+    organize SIMILAR@file.pdf      🔍 Find similar files
+    organize STATS                 📊 Show statistics
+    organize EXPORT                📤 Export file index
+
+SHORTCUTS (Even Cheesier!):
+    
+    organize @Desktop              = SORT@Desktop
+    organize @Downloads            = SORT@Downloads
+    organize ?invoice              = FIND@"invoice"
+    organize !yesterday            = WHEN@"yesterday"
+
+EXAMPLES:
+    
+    # Organize your desktop (the classic!)
+    organize @Desktop
+    
+    # Find all invoices
+    organize ?invoice
+    
+    # Tag files in Documents with AI
+    organize TAG@Documents
+    
+    # Find files from yesterday
+    organize WHEN@yesterday
+    
+    # Find files related to a project
+    organize GRAPH@ClientX
+    
+    # Find files similar to one you have
+    organize SIMILAR@~/Documents/proposal.pdf
+    
+    # Export everything to HTML catalog
+    organize EXPORT
+
+TIPS:
+    
+    • Use quotes for paths with spaces: organize TAG@"My Folder"
+    • Common folders work without paths: Desktop, Downloads, Documents
+    • The @ symbol is the magic - it separates command from target
+    • ? is for quick searches, ! is for time searches
+
+{self.rocket} Make it even easier - create an alias:
+    echo 'alias o="organize"' >> ~/.zshrc
+    
+    Then just type: o @Desktop
+
+"""
+        print(help_text)
+        return 0
+
+
+def main():
+    """Entry point"""
+    
+    # No arguments - show help
+    if len(sys.argv) < 2:
+        cli = MagicalCLI()
+        cli.show_help()
+        return 0
+    
+    # Get command
+    command = ' '.join(sys.argv[1:])
+    
+    # Run it!
+    cli = MagicalCLI()
+    return cli.run(command)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

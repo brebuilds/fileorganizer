@@ -1,0 +1,5 @@
+#!/bin/bash
+# Wrapper script for the organize CLI
+cd "$(dirname "$0")"
+./one/bin/python3 organize "$@"
+

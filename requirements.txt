@@ -1,0 +1,44 @@
+# File Organizer - ADHD-Friendly File Management App
+# Python 3.13+ recommended
+
+# GUI Framework
+PyQt6>=6.10.0
+pyqt6-qt6>=6.10.0
+
+# AI/LLM Integration
+ollama>=0.6.0
+
+# Database (SQLite is built-in, but these enhance it)
+# (no external deps needed)
+
+# PDF Processing
+pypdf2>=3.0.1
+
+# Image Processing
+Pillow>=10.0.0
+
+# HTTP/Network (for Ollama)
+httpx>=0.28.0
+httpcore>=1.0.0
+h11>=0.16.0
+
+# Type hints and validation
+pydantic>=2.12.0
+annotated-types>=0.7.0
+
+# Async support
+anyio>=4.11.0
+
+# macOS App Building
+py2app>=0.28.0
+
+# Vector/Graph Operations
+numpy>=1.24.0
+
+# OpenAI Integration (optional - only if using OpenAI features)
+openai>=1.0.0  # Optional: pip install openai
+
+# Development/Testing (optional)
+pytest>=7.4.0
+black>=23.0.0
+

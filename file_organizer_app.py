@@ -821,6 +821,65 @@ class MainWindow(QMainWindow):
             Qt.WindowType.WindowStaysOnTopHint
         )
     
+    def detect_cloud_storage(self):
+        """Detect installed cloud storage services and their paths"""
+        import os
+        home = os.path.expanduser("~")
+        
+        cloud_paths = {
+            'Dropbox': None,
+            'iCloud Drive': None,
+            'Google Drive': None,
+            'OneDrive': None
+        }
+        
+        # Check for Dropbox
+        dropbox_path = os.path.join(home, 'Dropbox')
+        if os.path.exists(dropbox_path) and os.path.isdir(dropbox_path):
+            cloud_paths['Dropbox'] = dropbox_path
+        
+        # Check for iCloud Drive
+        icloud_path = os.path.join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs')
+        if os.path.exists(icloud_path) and os.path.isdir(icloud_path):
+            cloud_paths['iCloud Drive'] = icloud_path
+        
+        # Check for Google Drive (multiple possible locations)
+        gdrive_paths = [
+            os.path.join(home, 'Google Drive'),
+            os.path.join(home, 'GoogleDrive'),
+            os.path.join(home, 'Library', 'CloudStorage', 'GoogleDrive-*')  # New Google Drive for Desktop
+        ]
+        for path in gdrive_paths:
+            if '*' in path:
+                # Glob pattern for new Google Drive
+                import glob
+                matches = glob.glob(path)
+                if matches and os.path.isdir(matches[0]):
+                    cloud_paths['Google Drive'] = matches[0]
+                    break
+            elif os.path.exists(path) and os.path.isdir(path):
+                cloud_paths['Google Drive'] = path
+                break
+        
+        # Check for OneDrive
+        onedrive_paths = [
+            os.path.join(home, 'OneDrive'),
+            os.path.join(home, 'OneDrive - Personal'),
+            os.path.join(home, 'Library', 'CloudStorage', 'OneDrive-*')
+        ]
+        for path in onedrive_paths:
+            if '*' in path:
+                import glob
+                matches = glob.glob(path)
+                if matches and os.path.isdir(matches[0]):
+                    cloud_paths['OneDrive'] = matches[0]
+                    break
+            elif os.path.exists(path) and os.path.isdir(path):
+                cloud_paths['OneDrive'] = path
+                break
+        
+        return cloud_paths
+    
     def create_guide_tab(self):
         """Create the guide/tips tab"""
         guide_widget = QWidget()
@@ -1165,12 +1224,24 @@ class MainWindow(QMainWindow):
         cloud_layout.addWidget(cloud_header)
         
         self.cloud_checks = {}
-        cloud_services = ['Dropbox', 'iCloud Drive', 'Google Drive', 'OneDrive']
-        for service in cloud_services:
+        
+        # Detect cloud storage folders
+        cloud_paths = self.detect_cloud_storage()
+        
+        for service, path in cloud_paths.items():
             check = QCheckBox(service)
-            check.setEnabled(False)  # Will enable when detected
-            check.setToolTip(f"{service} folder will be auto-detected if installed")
-            self.cloud_checks[service] = check
+            if path:
+                # Found the cloud storage folder
+                check.setEnabled(True)
+                check.setChecked(path in self.user_profile.get('monitored_folders', []))
+                check.setToolTip(f"✅ Detected at: {path}\nCheck to index this folder")
+                self.cloud_checks[service] = (check, path)  # Store checkbox and path
+            else:
+                # Not found
+                check.setEnabled(False)
+                check.setToolTip(f"❌ {service} folder not found on this Mac")
+                self.cloud_checks[service] = (check, None)
+            
             cloud_layout.addWidget(check)
         
         cloud_layout.addStretch()
@@ -1331,17 +1402,30 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Scan Error", f"Error scanning: {str(e)}")
     
     def scan_selected_folders(self):
-        """Scan all checked folders"""
-        selected_folders = [folder for folder, check in self.folder_checks.items() if check.isChecked()]
+        """Scan all checked folders (local + cloud)"""
+        # Collect all selected folders
+        folders_to_scan = []
         
-        if not selected_folders:
+        # Add local folders
+        for folder, check in self.folder_checks.items():
+            if check.isChecked():
+                folder_path = os.path.expanduser(f"~/{folder}")
+                if os.path.exists(folder_path):
+                    folders_to_scan.append((folder, folder_path))
+        
+        # Add cloud storage folders
+        for service, (check, path) in self.cloud_checks.items():
+            if check.isChecked() and path and os.path.exists(path):
+                folders_to_scan.append((service, path))
+        
+        if not folders_to_scan:
             QMessageBox.information(self, "No Folders Selected", "Please select at least one folder to scan.")
             return
         
         self.activity_log.add_activity(
             "Started",
             "Batch Scan",
-            f"Scanning {len(selected_folders)} folders..."
+            f"Scanning {len(folders_to_scan)} folders..."
         )
         
         total_indexed = 0
@@ -1349,12 +1433,10 @@ class MainWindow(QMainWindow):
         
         indexer = FileIndexer(self.file_db, self.activity_log)
         
-        for folder in selected_folders:
-            folder_path = os.path.expanduser(f"~/{folder}")
-            if os.path.exists(folder_path):
-                indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
-                total_indexed += indexed
-                total_skipped += skipped
+        for folder_name, folder_path in folders_to_scan:
+            indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
+            total_indexed += indexed
+            total_skipped += skipped
         
         QMessageBox.information(
             self,
@@ -1425,8 +1507,19 @@ class MainWindow(QMainWindow):
         projects_text = self.projects_input.toPlainText()
         self.user_profile['projects'] = [p.strip() for p in projects_text.split('\n') if p.strip()]
         
-        # Update monitored folders
-        monitored = [folder for folder, check in self.folder_checks.items() if check.isChecked()]
+        # Update monitored folders (local folders)
+        monitored = []
+        
+        # Add checked local folders
+        for folder, check in self.folder_checks.items():
+            if check.isChecked():
+                monitored.append(folder)
+        
+        # Add checked cloud storage paths
+        for service, (check, path) in self.cloud_checks.items():
+            if check.isChecked() and path:
+                monitored.append(path)
+        
         self.user_profile['monitored_folders'] = monitored
         
         # Update settings in profile

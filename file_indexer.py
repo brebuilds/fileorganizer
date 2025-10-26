@@ -229,6 +229,84 @@ class FileDatabase:
             )
         """)
         
+        # File events for temporal tracking
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS file_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id INTEGER,
+                event_type TEXT NOT NULL,
+                event_date TEXT NOT NULL,
+                metadata TEXT,
+                FOREIGN KEY (file_id) REFERENCES files(id)
+            )
+        """)
+        
+        # Bookmarks and URLs
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bookmarks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                title TEXT,
+                description TEXT,
+                tags TEXT,
+                source TEXT,
+                created_date TEXT NOT NULL,
+                last_accessed TEXT,
+                access_count INTEGER DEFAULT 0,
+                downloaded_file_id INTEGER,
+                metadata TEXT,
+                FOREIGN KEY (downloaded_file_id) REFERENCES files(id)
+            )
+        """)
+        
+        # Bulk operations history (for undo)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bulk_operations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation_type TEXT NOT NULL,
+                operation_date TEXT NOT NULL,
+                files_affected TEXT NOT NULL,
+                original_state TEXT NOT NULL,
+                new_state TEXT,
+                can_undo INTEGER DEFAULT 1,
+                completed INTEGER DEFAULT 0
+            )
+        """)
+        
+        # Screenshot metadata
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS screenshot_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id INTEGER,
+                capture_date TEXT,
+                source_app TEXT,
+                screen_region TEXT,
+                has_text INTEGER DEFAULT 0,
+                extracted_text TEXT,
+                FOREIGN KEY (file_id) REFERENCES files(id)
+            )
+        """)
+        
+        # Mobile sync queue
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mobile_sync_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id INTEGER,
+                action TEXT NOT NULL,
+                sync_date TEXT NOT NULL,
+                synced INTEGER DEFAULT 0,
+                device_id TEXT,
+                FOREIGN KEY (file_id) REFERENCES files(id)
+            )
+        """)
+        
+        # Indices for new tables
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_file_events_date ON file_events(event_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_url ON bookmarks(url)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_bulk_ops_date ON bulk_operations(operation_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_screenshot_file ON screenshot_metadata(file_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminders_date ON reminders(reminder_date)")
+        
         self.conn.commit()
         
         # Migrate existing database to add new columns

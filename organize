@@ -48,6 +48,10 @@ from bulk_operations import BulkOperations
 from aging_manager import AgingManager
 from screenshot_manager import ScreenshotManager
 from suggestions_engine import SuggestionsEngine
+from bookmark_manager import BookmarkManager
+from external_tools import ExternalToolIntegration
+from mobile_companion import MobileCompanion
+from performance_optimizer import PerformanceOptimizer
 
 
 class MagicalCLI:
@@ -146,6 +150,21 @@ class MagicalCLI:
             
             elif cmd == 'SUGGEST' or cmd == 'SUGGESTIONS':
                 return self.show_suggestions()
+            
+            elif cmd == 'BOOKMARK' or cmd == 'BOOKMARKS':
+                return self.bookmark_operations(target)
+            
+            elif cmd == 'OPTIMIZE' or cmd == 'OPTIMIZE':
+                return self.optimize_database()
+            
+            elif cmd == 'HIDE' or cmd == 'UNHIDE':
+                return self.hide_file_operations(target)
+            
+            elif cmd == 'MOBILE':
+                return self.mobile_operations(target)
+            
+            elif cmd == 'ALFRED' or cmd == 'RAYCAST':
+                return self.external_tool_setup(cmd)
             
             elif cmd == 'VIZ' or cmd == 'VISUALIZE':
                 return self.show_visualizer(target)
@@ -410,6 +429,201 @@ class MagicalCLI:
         
         return f"{start.strftime('%b %d')} to {end.strftime('%b %d')}"
     
+    def show_suggestions(self):
+        """Show smart suggestions and nudges"""
+        print(f"\n💡 Smart Suggestions & Nudges\n")
+        
+        reminders = ReminderSystem(self.db)
+        nudges = reminders.get_nudges(limit=10)
+        
+        if not nudges:
+            print("✨ All good! No suggestions at the moment.\n")
+            return 0
+        
+        print(f"Found {len(nudges)} suggestions:\n")
+        for i, nudge in enumerate(nudges, 1):
+            priority_icon = "🔴" if nudge['priority'] >= 8 else "🟠" if nudge['priority'] >= 6 else "🟡"
+            print(f"{i}. {priority_icon} {nudge['message']}")
+            print(f"   Action: {nudge.get('action', 'review')}")
+            print()
+        
+        return 0
+    
+    def show_reminders(self, target):
+        """Show reminders"""
+        print(f"\n⏰ Reminders\n")
+        
+        reminder_sys = ReminderSystem(self.db)
+        
+        # Due reminders
+        due = reminder_sys.get_due_reminders()
+        if due:
+            print(f"🔴 Due Now ({len(due)}):")
+            for r in due[:5]:
+                print(f"   • {r['filename']}: {r['message'] or 'Reminder'}")
+            print()
+        
+        # Upcoming reminders
+        upcoming = reminder_sys.get_upcoming_reminders(days_ahead=7)
+        if upcoming:
+            print(f"📅 Upcoming ({len(upcoming)}):")
+            for r in upcoming[:5]:
+                date = datetime.fromisoformat(r['reminder_date']).strftime('%m/%d')
+                print(f"   • [{date}] {r['filename']}")
+            print()
+        
+        if not due and not upcoming:
+            print("✨ No reminders set.\n")
+        
+        return 0
+    
+    def show_smart_folders(self, target):
+        """Show smart folders"""
+        print(f"\n📁 Smart Folders\n")
+        
+        smart = SmartFolders(self.db)
+        folders = smart.get_all_smart_folders()
+        
+        if not folders:
+            print("No smart folders yet. Creating defaults...\n")
+            created = smart.create_default_smart_folders()
+            print(f"✅ Created {len(created)} default folders\n")
+            folders = smart.get_all_smart_folders()
+        
+        print(f"Found {len(folders)} smart folders:\n")
+        for i, folder in enumerate(folders, 1):
+            count = smart.get_file_count(folder['id'])
+            print(f"{i}. {folder['icon']} {folder['name']}")
+            print(f"   {count} files • {folder['description'] or 'No description'}")
+            print()
+        
+        return 0
+    
+    def bookmark_operations(self, target):
+        """Bookmark operations"""
+        print(f"\n🔖 Bookmark Manager\n")
+        
+        manager = BookmarkManager(self.db)
+        
+        if not target:
+            # Show all bookmarks
+            bookmarks = manager.get_all_bookmarks(limit=20)
+            print(f"📚 Your Bookmarks ({len(bookmarks)} total):\n")
+            for i, bm in enumerate(bookmarks, 1):
+                print(f"{i}. {bm['title']}")
+                print(f"   {bm['url']}")
+                if bm['tags']:
+                    print(f"   Tags: {', '.join(bm['tags'])}")
+                print()
+        else:
+            # Search bookmarks
+            results = manager.search_bookmarks(query=target)
+            print(f"🔍 Found {len(results)} bookmarks matching '{target}':\n")
+            for i, bm in enumerate(results, 1):
+                print(f"{i}. {bm['title']}")
+                print(f"   {bm['url']}")
+                print()
+        
+        return 0
+    
+    def optimize_database(self):
+        """Optimize database performance"""
+        print(f"\n⚡ Optimizing Database...\n")
+        
+        optimizer = PerformanceOptimizer(self.db)
+        optimizer.optimize_database()
+        
+        stats = optimizer.get_database_stats()
+        print(f"\n📊 Database Stats:")
+        print(f"   Size: {stats['db_size_mb']:.2f} MB")
+        print(f"   Indexes: {stats['index_count']}")
+        print(f"   Cache entries: {stats['search_cache_size']}")
+        print()
+        
+        return 0
+    
+    def hide_file_operations(self, target):
+        """Hide/unhide files from search"""
+        if not target:
+            print("Usage: organize HIDE@/path/to/file")
+            return 1
+        
+        path = os.path.expanduser(target)
+        cursor = self.db.conn.cursor()
+        
+        # Check current status
+        cursor.execute("SELECT id, hide_from_app FROM files WHERE path = ?", (path,))
+        row = cursor.fetchone()
+        
+        if not row:
+            print(f"❌ File not found: {path}")
+            return 1
+        
+        file_id, hidden = row
+        new_status = 0 if hidden else 1
+        
+        cursor.execute("UPDATE files SET hide_from_app = ? WHERE id = ?", (new_status, file_id))
+        self.db.conn.commit()
+        
+        if new_status:
+            print(f"👻 Hidden from search: {os.path.basename(path)}")
+        else:
+            print(f"👁️  Visible in search: {os.path.basename(path)}")
+        
+        return 0
+    
+    def mobile_operations(self, target):
+        """Mobile companion operations"""
+        print(f"\n📱 Mobile Companion\n")
+        
+        mobile = MobileCompanion(self.db)
+        stats = mobile.get_mobile_stats()
+        
+        print(f"📊 Stats:")
+        print(f"   Total files: {stats['total_files']}")
+        print(f"   Total size: {stats['total_size_mb']:.1f} MB")
+        print(f"   Recent (7d): {stats['recent_files']}")
+        
+        if stats['top_types']:
+            print(f"\n📄 Top file types:")
+            for ext, count in list(stats['top_types'].items())[:5]:
+                print(f"   {ext}: {count} files")
+        
+        print(f"\n💡 Quick Suggestions:")
+        suggestions = mobile.quick_organize_suggestion()
+        for sug in suggestions:
+            print(f"   [{sug['priority']}] {sug['message']}")
+        
+        print()
+        return 0
+    
+    def external_tool_setup(self, tool):
+        """Set up external tool integrations"""
+        print(f"\n🔧 Setting up {tool} Integration\n")
+        
+        tools = ExternalToolIntegration(self.db)
+        
+        if tool.upper() == 'ALFRED':
+            output_dir = tools.generate_alfred_workflow()
+            print(f"✅ Alfred workflow created at:")
+            print(f"   {output_dir}")
+            print(f"\nTo install:")
+            print(f"   1. Open Alfred Preferences")
+            print(f"   2. Go to Workflows tab")
+            print(f"   3. Import the workflow from above folder")
+        
+        elif tool.upper() == 'RAYCAST':
+            output_dir = tools.generate_raycast_extension()
+            print(f"✅ Raycast extension created at:")
+            print(f"   {output_dir}")
+            print(f"\nTo install:")
+            print(f"   1. Open Raycast")
+            print(f"   2. Go to Extensions → Add Extension")
+            print(f"   3. Import from above folder")
+        
+        print()
+        return 0
+    
     def show_help(self):
         """Show help message"""
         help_text = f"""
@@ -426,6 +640,21 @@ BASIC COMMANDS (The Cheesy Ones):
     organize SIMILAR@file.pdf      🔍 Find similar files
     organize STATS                 📊 Show statistics
     organize EXPORT                📤 Export file index
+
+NEW FEATURES:
+    
+    organize SCREENSHOTS           📸 Manage screenshots
+    organize DUPLICATES            🔄 Find duplicate files
+    organize SMART                 📁 Show smart folders
+    organize BOOKMARKS             🔖 Manage bookmarks
+    organize REMIND                ⏰ Show reminders
+    organize SUGGEST               💡 Get suggestions
+    organize TRASH                 🗑️  View trash/recover files
+    organize OPTIMIZE              ⚡ Optimize database
+    organize HIDE@file             👻 Hide file from search
+    organize MOBILE                📱 Mobile companion stats
+    organize ALFRED                🔮 Setup Alfred integration
+    organize RAYCAST               ⚡ Setup Raycast integration
 
 SHORTCUTS (Even Cheesier!):
     

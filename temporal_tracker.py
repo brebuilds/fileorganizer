@@ -25,7 +25,7 @@ class TemporalTracker:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_id INTEGER,
                 event_type TEXT NOT NULL,
-                event_timestamp TEXT NOT NULL,
+                event_date TEXT NOT NULL,
                 details TEXT,
                 FOREIGN KEY (file_id) REFERENCES files(id)
             )
@@ -33,8 +33,8 @@ class TemporalTracker:
         
         # Index for fast temporal queries
         cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_event_timestamp 
-            ON file_events(event_timestamp)
+            CREATE INDEX IF NOT EXISTS idx_event_date 
+            ON file_events(event_date)
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_event_type 
@@ -57,7 +57,7 @@ class TemporalTracker:
         """
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            INSERT INTO file_events (file_id, event_type, event_timestamp, details)
+            INSERT INTO file_events (file_id, event_type, event_date, details)
             VALUES (?, ?, ?, ?)
         """, (file_id, event_type, datetime.now().isoformat(), details))
         self.db.conn.commit()
@@ -164,7 +164,7 @@ class TemporalTracker:
                 WHERE f.status = 'active'
                 AND (
                     (e.event_type IN ('discovered', 'downloaded') 
-                     AND e.event_timestamp BETWEEN ? AND ?)
+                     AND e.event_date BETWEEN ? AND ?)
                     OR
                     (f.created_date BETWEEN ? AND ?)
                 )
@@ -183,7 +183,7 @@ class TemporalTracker:
                 WHERE f.status = 'active'
                 AND (
                     (e.event_type = 'modified' 
-                     AND e.event_timestamp BETWEEN ? AND ?)
+                     AND e.event_date BETWEEN ? AND ?)
                     OR
                     (f.modified_date BETWEEN ? AND ?)
                 )
@@ -213,11 +213,11 @@ class TemporalTracker:
                 LEFT JOIN file_events e ON f.id = e.file_id
                 WHERE f.status = 'active'
                 AND (
-                    e.event_timestamp BETWEEN ? AND ?
+                    e.event_date BETWEEN ? AND ?
                     OR f.created_date BETWEEN ? AND ?
                     OR f.modified_date BETWEEN ? AND ?
                 )
-                ORDER BY COALESCE(e.event_timestamp, f.modified_date, f.created_date) DESC
+                ORDER BY COALESCE(e.event_date, f.modified_date, f.created_date) DESC
                 LIMIT ?
             """, (start_time.isoformat(), end_time.isoformat(),
                   start_time.isoformat(), end_time.isoformat(),
@@ -252,10 +252,10 @@ class TemporalTracker:
         
         # Get all events
         cursor.execute("""
-            SELECT event_type, event_timestamp, details
+            SELECT event_type, event_date, details
             FROM file_events
             WHERE file_id = ?
-            ORDER BY event_timestamp
+            ORDER BY event_date
         """, (file_id,))
         
         events = cursor.fetchall()
@@ -286,7 +286,7 @@ class TemporalTracker:
             SELECT COUNT(DISTINCT file_id)
             FROM file_events
             WHERE event_type IN ('discovered', 'downloaded')
-            AND event_timestamp > ?
+            AND event_date > ?
         """, (start.isoformat(),))
         discovered = cursor.fetchone()[0]
         

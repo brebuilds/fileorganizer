@@ -1,51 +1,87 @@
 #!/usr/bin/env python3
 """
-Smart Folders - Saved Searches
-Virtual folders that show files matching specific criteria
+Smart Folders System for File Organizer
+Dynamic folders that auto-update based on queries (like macOS Smart Folders but better)
 """
 
+import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+import sqlite3
 
 
 class SmartFolders:
-    """Manage smart folders (saved searches)"""
+    """Manages dynamic smart folders (saved searches with auto-updates)"""
     
-    def __init__(self, file_db):
-        self.db = file_db
+    def __init__(self, db):
+        self.db = db
     
-    def create(self, name, query, description=None, icon='📁', color='#3b82f6'):
+    def create_smart_folder(self, name, query, description=None, icon='📁', color='#3b82f6'):
         """
         Create a new smart folder
         
         Args:
-            name: Folder name
-            query: Search query/criteria
+            name: Display name
+            query: Search query/filter (JSON format)
             description: Optional description
             icon: Emoji icon
             color: Hex color code
+        
+        Returns:
+            Smart folder ID
         """
         cursor = self.db.conn.cursor()
         
+        # Convert query dict to JSON if needed
+        if isinstance(query, dict):
+            query = json.dumps(query)
+        
         try:
             cursor.execute("""
-                INSERT INTO smart_folders (name, description, query, icon, color, created_date)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO smart_folders
+                (name, description, query, icon, color, created_date, last_used, use_count)
+                VALUES (?, ?, ?, ?, ?, ?, NULL, 0)
             """, (name, description, query, icon, color, datetime.now().isoformat()))
             
             self.db.conn.commit()
             return cursor.lastrowid
-        except Exception as e:
-            print(f"Error creating smart folder: {e}")
+        except sqlite3.IntegrityError:
+            # Smart folder with this name already exists
             return None
     
-    def get_all(self):
-        """Get all smart folders"""
+    def get_smart_folder(self, smart_folder_id):
+        """Get smart folder details"""
         cursor = self.db.conn.cursor()
+        
         cursor.execute("""
             SELECT id, name, description, query, icon, color, created_date, last_used, use_count
             FROM smart_folders
-            ORDER BY use_count DESC, name
+            WHERE id = ?
+        """, (smart_folder_id,))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'query': json.loads(row[3]),
+                'icon': row[4],
+                'color': row[5],
+                'created_date': row[6],
+                'last_used': row[7],
+                'use_count': row[8]
+            }
+        return None
+    
+    def get_all_smart_folders(self):
+        """Get all smart folders"""
+        cursor = self.db.conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, name, description, query, icon, color, created_date, last_used, use_count
+            FROM smart_folders
+            ORDER BY use_count DESC, name ASC
         """)
         
         folders = []
@@ -54,7 +90,7 @@ class SmartFolders:
                 'id': row[0],
                 'name': row[1],
                 'description': row[2],
-                'query': row[3],
+                'query': json.loads(row[3]),
                 'icon': row[4],
                 'color': row[5],
                 'created_date': row[6],
@@ -64,263 +100,279 @@ class SmartFolders:
         
         return folders
     
-    def get_by_id(self, folder_id):
-        """Get smart folder by ID"""
-        cursor = self.db.conn.cursor()
-        cursor.execute("""
-            SELECT id, name, description, query, icon, color, created_date, last_used, use_count
-            FROM smart_folders
-            WHERE id = ?
-        """, (folder_id,))
-        
-        row = cursor.fetchone()
-        if row:
-            return {
-                'id': row[0],
-                'name': row[1],
-                'description': row[2],
-                'query': row[3],
-                'icon': row[4],
-                'color': row[5],
-                'created_date': row[6],
-                'last_used': row[7],
-                'use_count': row[8]
-            }
-        return None
-    
-    def execute_query(self, folder_id):
-        """Execute a smart folder query and return results"""
-        folder = self.get_by_id(folder_id)
+    def execute_smart_folder(self, smart_folder_id):
+        """
+        Execute a smart folder query and return matching files
+        Also updates last_used and use_count
+        """
+        folder = self.get_smart_folder(smart_folder_id)
         if not folder:
             return []
         
-        # Update usage
+        query = folder['query']
+        results = self._execute_query(query)
+        
+        # Update usage stats
         cursor = self.db.conn.cursor()
         cursor.execute("""
             UPDATE smart_folders
             SET last_used = ?, use_count = use_count + 1
             WHERE id = ?
-        """, (datetime.now().isoformat(), folder_id))
+        """, (datetime.now().isoformat(), smart_folder_id))
         self.db.conn.commit()
         
-        # Execute the query
-        query = folder['query']
-        return self._execute_search(query)
+        return results
     
-    def _execute_search(self, query):
-        """Execute a search query"""
+    def _execute_query(self, query):
+        """
+        Execute a smart folder query
+        
+        Query format (JSON):
+        {
+            "extension": [".pdf", ".doc"],
+            "tags": ["work", "important"],
+            "project": "ClientX",
+            "date_range": {"start": "2024-01-01", "end": "2024-12-31"},
+            "min_size": 1024,
+            "max_size": 10485760,
+            "contains_text": "invoice",
+            "folder": "~/Downloads"
+        }
+        """
         cursor = self.db.conn.cursor()
         
-        # Parse query (simple version - can be enhanced)
-        # Format: "tag:invoice" or "project:ClientX" or "type:pdf" or plain text
+        # Build SQL query dynamically based on filters
+        sql = "SELECT DISTINCT f.* FROM files f LEFT JOIN tags t ON f.id = t.file_id WHERE f.status = 'active'"
+        params = []
         
-        if ':' in query:
-            # Structured query
-            key, value = query.split(':', 1)
-            key = key.strip().lower()
-            value = value.strip()
-            
-            if key == 'tag':
-                cursor.execute("""
-                    SELECT id, filename, path, ai_summary, ai_tags
-                    FROM files
-                    WHERE ai_tags LIKE ?
-                    AND status = 'active'
-                    AND hide_from_app = 0
-                    ORDER BY modified_date DESC
-                """, (f'%{value}%',))
-            
-            elif key == 'project':
-                cursor.execute("""
-                    SELECT id, filename, path, ai_summary, ai_tags
-                    FROM files
-                    WHERE project LIKE ?
-                    AND status = 'active'
-                    AND hide_from_app = 0
-                    ORDER BY modified_date DESC
-                """, (f'%{value}%',))
-            
-            elif key == 'type' or key == 'ext':
-                cursor.execute("""
-                    SELECT id, filename, path, ai_summary, ai_tags
-                    FROM files
-                    WHERE extension LIKE ?
-                    AND status = 'active'
-                    AND hide_from_app = 0
-                    ORDER BY modified_date DESC
-                """, (f'%{value}%',))
-            
-            elif key == 'folder':
-                cursor.execute("""
-                    SELECT id, filename, path, ai_summary, ai_tags
-                    FROM files
-                    WHERE folder_location LIKE ?
-                    AND status = 'active'
-                    AND hide_from_app = 0
-                    ORDER BY modified_date DESC
-                """, (f'%{value}%',))
-            
-            else:
-                # Unknown key, do plain search
-                return self._plain_search(query)
-        else:
-            # Plain text search
-            return self._plain_search(query)
+        # Extension filter
+        if 'extension' in query and query['extension']:
+            exts = query['extension'] if isinstance(query['extension'], list) else [query['extension']]
+            placeholders = ','.join(['?' for _ in exts])
+            sql += f" AND f.extension IN ({placeholders})"
+            params.extend(exts)
         
+        # Tags filter
+        if 'tags' in query and query['tags']:
+            tags = query['tags'] if isinstance(query['tags'], list) else [query['tags']]
+            placeholders = ','.join(['?' for _ in tags])
+            sql += f" AND t.tag IN ({placeholders})"
+            params.extend(tags)
+        
+        # Project filter
+        if 'project' in query and query['project']:
+            sql += " AND f.project = ?"
+            params.append(query['project'])
+        
+        # Date range filter
+        if 'date_range' in query:
+            if 'start' in query['date_range']:
+                sql += " AND f.modified_date >= ?"
+                params.append(query['date_range']['start'])
+            if 'end' in query['date_range']:
+                sql += " AND f.modified_date <= ?"
+                params.append(query['date_range']['end'])
+        
+        # Size filters
+        if 'min_size' in query:
+            sql += " AND f.size >= ?"
+            params.append(query['min_size'])
+        
+        if 'max_size' in query:
+            sql += " AND f.size <= ?"
+            params.append(query['max_size'])
+        
+        # Text content filter
+        if 'contains_text' in query and query['contains_text']:
+            text = query['contains_text']
+            sql += " AND (f.content_text LIKE ? OR f.ai_summary LIKE ? OR f.ocr_text LIKE ?)"
+            params.extend([f"%{text}%", f"%{text}%", f"%{text}%"])
+        
+        # Folder filter
+        if 'folder' in query and query['folder']:
+            folder = os.path.expanduser(query['folder'])
+            sql += " AND f.folder_location LIKE ?"
+            params.append(f"{folder}%")
+        
+        # Screenshot filter
+        if 'is_screenshot' in query:
+            sql += " AND f.is_screenshot = ?"
+            params.append(1 if query['is_screenshot'] else 0)
+        
+        # Has duplicates filter
+        if 'is_duplicate' in query:
+            sql += " AND f.is_duplicate = ?"
+            params.append(1 if query['is_duplicate'] else 0)
+        
+        sql += " ORDER BY f.modified_date DESC LIMIT 1000"
+        
+        cursor.execute(sql, params)
+        
+        columns = [desc[0] for desc in cursor.description]
         results = []
         for row in cursor.fetchall():
-            results.append({
-                'id': row[0],
-                'filename': row[1],
-                'path': row[2],
-                'summary': row[3],
-                'tags': row[4]
-            })
+            results.append(dict(zip(columns, row)))
         
         return results
     
-    def _plain_search(self, query):
-        """Plain text search across filename, content, summary, tags"""
+    def update_smart_folder(self, smart_folder_id, name=None, query=None, description=None, icon=None, color=None):
+        """Update smart folder properties"""
         cursor = self.db.conn.cursor()
-        cursor.execute("""
-            SELECT id, filename, path, ai_summary, ai_tags
-            FROM files
-            WHERE (
-                filename LIKE ? 
-                OR content_text LIKE ?
-                OR ai_summary LIKE ?
-                OR ai_tags LIKE ?
-            )
-            AND status = 'active'
-            AND hide_from_app = 0
-            ORDER BY modified_date DESC
-            LIMIT 100
-        """, (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%'))
         
-        results = []
-        for row in cursor.fetchall():
-            results.append({
-                'id': row[0],
-                'filename': row[1],
-                'path': row[2],
-                'summary': row[3],
-                'tags': row[4]
-            })
+        updates = []
+        params = []
         
-        return results
+        if name is not None:
+            updates.append("name = ?")
+            params.append(name)
+        
+        if query is not None:
+            if isinstance(query, dict):
+                query = json.dumps(query)
+            updates.append("query = ?")
+            params.append(query)
+        
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+        
+        if icon is not None:
+            updates.append("icon = ?")
+            params.append(icon)
+        
+        if color is not None:
+            updates.append("color = ?")
+            params.append(color)
+        
+        if updates:
+            params.append(smart_folder_id)
+            sql = f"UPDATE smart_folders SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(sql, params)
+            self.db.conn.commit()
+            return True
+        
+        return False
     
-    def delete(self, folder_id):
+    def delete_smart_folder(self, smart_folder_id):
         """Delete a smart folder"""
         cursor = self.db.conn.cursor()
-        cursor.execute("DELETE FROM smart_folders WHERE id = ?", (folder_id,))
+        cursor.execute("DELETE FROM smart_folders WHERE id = ?", (smart_folder_id,))
         self.db.conn.commit()
     
-    def update(self, folder_id, **kwargs):
-        """Update smart folder properties"""
-        allowed_fields = {'name', 'description', 'query', 'icon', 'color'}
-        updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    def get_file_count(self, smart_folder_id):
+        """Get count of files in smart folder without fetching all"""
+        folder = self.get_smart_folder(smart_folder_id)
+        if not folder:
+            return 0
         
-        if not updates:
-            return
-        
-        cursor = self.db.conn.cursor()
-        set_clause = ', '.join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [folder_id]
-        
-        cursor.execute(f"UPDATE smart_folders SET {set_clause} WHERE id = ?", values)
-        self.db.conn.commit()
+        # Execute query but only count
+        results = self._execute_query(folder['query'])
+        return len(results)
     
-    def create_default_folders(self):
-        """Create some useful default smart folders"""
+    def create_default_smart_folders(self):
+        """Create helpful default smart folders"""
         defaults = [
             {
-                'name': 'Recent Invoices',
-                'query': 'tag:invoice',
-                'description': 'All files tagged as invoices',
-                'icon': '💰',
-                'color': '#10b981'
+                'name': 'Recent Files',
+                'description': 'Files modified in the last 7 days',
+                'icon': '🕒',
+                'color': '#10b981',
+                'query': {
+                    'date_range': {
+                        'start': (datetime.now() - timedelta(days=7)).isoformat()
+                    }
+                }
             },
             {
-                'name': 'Urgent Files',
-                'query': 'urgent',
-                'description': 'Files marked as urgent',
-                'icon': '🔥',
-                'color': '#ef4444'
+                'name': 'Large Files',
+                'description': 'Files larger than 10 MB',
+                'icon': '📦',
+                'color': '#f59e0b',
+                'query': {
+                    'min_size': 10 * 1024 * 1024
+                }
             },
             {
                 'name': 'PDFs',
-                'query': 'type:pdf',
                 'description': 'All PDF documents',
                 'icon': '📄',
-                'color': '#ef4444'
+                'color': '#ef4444',
+                'query': {
+                    'extension': ['.pdf']
+                }
             },
             {
                 'name': 'Screenshots',
-                'query': 'type:.png',
-                'description': 'All screenshot images',
+                'description': 'All screenshots',
                 'icon': '📸',
-                'color': '#8b5cf6'
+                'color': '#8b5cf6',
+                'query': {
+                    'is_screenshot': True
+                }
             },
             {
-                'name': 'Recent Downloads',
-                'query': 'folder:Downloads',
+                'name': 'Duplicates',
+                'description': 'Duplicate files',
+                'icon': '🔄',
+                'color': '#ec4899',
+                'query': {
+                    'is_duplicate': True
+                }
+            },
+            {
+                'name': 'Downloads',
                 'description': 'Files in Downloads folder',
-                'icon': '📥',
-                'color': '#3b82f6'
+                'icon': '⬇️',
+                'color': '#06b6d4',
+                'query': {
+                    'folder': '~/Downloads'
+                }
             }
         ]
         
         created = []
-        for folder in defaults:
-            # Check if it already exists
-            cursor = self.db.conn.cursor()
-            cursor.execute("SELECT id FROM smart_folders WHERE name = ?", (folder['name'],))
-            if not cursor.fetchone():
-                folder_id = self.create(**folder)
-                if folder_id:
-                    created.append(folder['name'])
+        for folder_def in defaults:
+            folder_id = self.create_smart_folder(
+                name=folder_def['name'],
+                query=folder_def['query'],
+                description=folder_def['description'],
+                icon=folder_def['icon'],
+                color=folder_def['color']
+            )
+            if folder_id:
+                created.append(folder_def['name'])
         
         return created
 
 
 if __name__ == "__main__":
-    print("📁 Smart Folders System")
-    print("="*60)
-    
+    # Test smart folders
     from file_indexer import FileDatabase
+    
+    print("Testing Smart Folders...")
     
     db = FileDatabase()
     smart = SmartFolders(db)
     
     # Create default folders
-    print("\n🎯 Creating default smart folders...")
-    created = smart.create_default_folders()
-    if created:
-        print(f"   Created: {', '.join(created)}")
-    else:
-        print("   All default folders already exist")
+    print("\n📁 Creating default smart folders...")
+    created = smart.create_default_smart_folders()
+    print(f"Created: {', '.join(created)}")
     
-    # List all smart folders
-    folders = smart.get_all()
-    print(f"\n📂 Smart Folders ({len(folders)}):\n")
-    
+    # Get all smart folders
+    print("\n📂 All Smart Folders:")
+    folders = smart.get_all_smart_folders()
     for folder in folders:
-        icon = folder['icon']
-        name = folder['name']
-        query = folder['query']
-        use_count = folder['use_count']
-        
-        print(f"   {icon} {name}")
-        print(f"      Query: {query}")
-        if use_count:
-            print(f"      Used: {use_count} times")
-        print()
+        count = smart.get_file_count(folder['id'])
+        print(f"{folder['icon']} {folder['name']}: {count} files")
     
-    # Test a query
+    # Test executing a smart folder
     if folders:
-        print(f"\n🔍 Testing first folder: {folders[0]['name']}")
-        results = smart.execute_query(folders[0]['id'])
-        print(f"   Found {len(results)} files")
+        print(f"\n🔍 Testing '{folders[0]['name']}'...")
+        results = smart.execute_smart_folder(folders[0]['id'])
+        print(f"Found {len(results)} files")
+        for i, file in enumerate(results[:5], 1):
+            print(f"  {i}. {file['filename']}")
     
     db.close()
-
+    print("\n✅ Smart folders test complete!")

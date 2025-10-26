@@ -1,205 +1,402 @@
 #!/usr/bin/env python3
 """
-Screenshot Manager
-Special handling for screenshots with OCR and smart naming
+Screenshot Manager for File Organizer
+Auto-detect, OCR, and organize screenshots intelligently
 """
 
 import os
 import re
 from datetime import datetime
 from pathlib import Path
+import sqlite3
+
+# Optional OCR support
+try:
+    import pytesseract
+    from PIL import Image
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    print("Note: OCR not available. Install pytesseract and Pillow for text extraction")
 
 
 class ScreenshotManager:
-    """Manage screenshots with OCR and organization"""
+    """Manages screenshot detection, OCR, and organization"""
     
-    def __init__(self, file_db, ocr_processor=None):
-        self.db = file_db
-        self.ocr = ocr_processor
-    
-    def is_screenshot(self, filepath):
-        """Detect if file is a screenshot"""
-        filename = Path(filepath).name.lower()
-        
-        patterns = [
-            r'^screenshot',
-            r'^screen[ _]shot',
-            r'^scr_\d+',
-            r'^img_\d{8}',
-            r'screen.*\d{4}-\d{2}-\d{2}',
+    def __init__(self, db):
+        self.db = db
+        self.screenshot_patterns = [
+            r'Screen Shot \d{4}-\d{2}-\d{2} at',  # macOS default
+            r'Screenshot \d{4}-\d{2}-\d{2}',       # Windows/Linux
+            r'screenshot_\d+',                      # Generic
+            r'CleanShot \d{4}-\d{2}-\d{2}',        # CleanShot X
+            r'SCR_\d+',                             # Android
+            r'IMG_\d+\.PNG'                         # iOS screenshots (uppercase PNG)
         ]
         
-        return any(re.search(pattern, filename) for pattern in patterns)
+        self.image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff']
     
-    def get_all_screenshots(self):
-        """Get all screenshots from database"""
+    def is_screenshot(self, filepath):
+        """
+        Detect if a file is a screenshot based on filename patterns
+        """
+        filename = os.path.basename(filepath)
+        
+        # Check filename patterns
+        for pattern in self.screenshot_patterns:
+            if re.search(pattern, filename, re.IGNORECASE):
+                return True
+        
+        # Check if PNG in Downloads/Desktop (likely screenshot)
+        if filepath.lower().endswith('.png'):
+            folder = os.path.dirname(filepath)
+            if 'Downloads' in folder or 'Desktop' in folder:
+                return True
+        
+        return False
+    
+    def detect_screenshots_in_database(self):
+        """
+        Scan existing files in database and mark screenshots
+        """
         cursor = self.db.conn.cursor()
+        
+        # Get all image files
         cursor.execute("""
-            SELECT id, path, filename, created_date, ocr_text
+            SELECT id, path, filename
             FROM files
-            WHERE is_screenshot = 1
-            AND status = 'active'
-            AND hide_from_app = 0
-            ORDER BY created_date DESC
+            WHERE extension IN ('.png', '.jpg', '.jpeg', '.gif')
+              AND status = 'active'
+              AND is_screenshot = 0
         """)
         
-        screenshots = []
-        for row in cursor.fetchall():
-            screenshots.append({
-                'id': row[0],
-                'path': row[1],
-                'filename': row[2],
-                'created': row[3],
-                'ocr_text': row[4]
-            })
+        files = cursor.fetchall()
+        screenshot_count = 0
         
-        return screenshots
+        for file_id, path, filename in files:
+            if self.is_screenshot(path):
+                # Mark as screenshot
+                cursor.execute("""
+                    UPDATE files
+                    SET is_screenshot = 1
+                    WHERE id = ?
+                """, (file_id,))
+                screenshot_count += 1
+        
+        self.db.conn.commit()
+        return screenshot_count
+    
+    def extract_text_from_screenshot(self, filepath):
+        """
+        Extract text from screenshot using OCR
+        """
+        if not OCR_AVAILABLE:
+            return None
+        
+        try:
+            image = Image.open(filepath)
+            text = pytesseract.image_to_string(image)
+            return text.strip() if text else None
+        except Exception as e:
+            print(f"Error extracting text from {filepath}: {e}")
+            return None
     
     def process_screenshot(self, file_id, filepath):
-        """Process a screenshot: OCR + smart naming"""
-        # Mark as screenshot
+        """
+        Process a screenshot: extract text, detect source app, save metadata
+        """
         cursor = self.db.conn.cursor()
-        cursor.execute("UPDATE files SET is_screenshot = 1 WHERE id = ?", (file_id,))
-        self.db.conn.commit()
         
-        # Run OCR if processor available
-        if self.ocr:
-            text = self.ocr.process_file(file_id, filepath)
-            if text:
-                return {
-                    'file_id': file_id,
-                    'ocr_success': True,
-                    'text_length': len(text)
-                }
-        
-        return {
-            'file_id': file_id,
-            'ocr_success': False
-        }
-    
-    def suggest_rename(self, file_id):
-        """Suggest better filename based on OCR content"""
-        cursor = self.db.conn.cursor()
+        # Check if already processed
         cursor.execute("""
-            SELECT filename, ocr_text, created_date
-            FROM files
-            WHERE id = ?
+            SELECT id FROM screenshot_metadata WHERE file_id = ?
         """, (file_id,))
         
-        result = cursor.fetchone()
-        if not result:
-            return None
+        if cursor.fetchone():
+            return  # Already processed
         
-        filename, ocr_text, created = result
+        # Extract text if OCR available
+        extracted_text = None
+        has_text = 0
         
-        if not ocr_text:
-            return None
+        if OCR_AVAILABLE:
+            extracted_text = self.extract_text_from_screenshot(filepath)
+            has_text = 1 if extracted_text else 0
         
-        # Extract keywords from OCR text
-        words = ocr_text.lower().split()
-        keywords = [w for w in words if len(w) > 4][:3]
+        # Detect source app (from filename if possible)
+        source_app = self._detect_source_app(filepath)
         
-        # Create suggestion
-        date_str = created[:10] if created else datetime.now().strftime("%Y-%m-%d")
-        keyword_part = "-".join(keywords) if keywords else "screenshot"
+        # Get capture date from file
+        stat = os.stat(filepath)
+        capture_date = datetime.fromtimestamp(stat.st_mtime).isoformat()
         
-        ext = Path(filename).suffix
-        suggested = f"Screenshot-{date_str}-{keyword_part}{ext}"
-        
-        return suggested
-    
-    def cleanup_old_screenshots(self, days=30, dry_run=True):
-        """Clean up old screenshots"""
-        from datetime import timedelta
-        
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-        cursor = self.db.conn.cursor()
-        
+        # Save metadata
         cursor.execute("""
-            SELECT id, filename, path, created_date
-            FROM files
-            WHERE is_screenshot = 1
-            AND created_date < ?
-            AND status = 'active'
-        """, (cutoff,))
+            INSERT INTO screenshot_metadata
+            (file_id, capture_date, source_app, has_text, extracted_text)
+            VALUES (?, ?, ?, ?, ?)
+        """, (file_id, capture_date, source_app, has_text, extracted_text))
         
-        old_screenshots = cursor.fetchall()
+        # Update file with OCR text
+        if extracted_text:
+            cursor.execute("""
+                UPDATE files
+                SET ocr_text = ?
+                WHERE id = ?
+            """, (extracted_text, file_id))
         
-        if dry_run:
-            return {
-                'would_clean': len(old_screenshots),
-                'dry_run': True
-            }
+        self.db.conn.commit()
+    
+    def _detect_source_app(self, filepath):
+        """Detect which app created the screenshot"""
+        filename = os.path.basename(filepath)
+        
+        if 'CleanShot' in filename:
+            return 'CleanShot X'
+        elif 'Screen Shot' in filename:
+            return 'macOS Screenshot'
+        elif 'Snagit' in filename:
+            return 'Snagit'
+        elif 'Skitch' in filename:
+            return 'Skitch'
         else:
-            # Mark as deleted
-            for file_id, *_ in old_screenshots:
-                cursor.execute("""
-                    UPDATE files SET status = 'archived' WHERE id = ?
-                """, (file_id,))
-            
-            self.db.conn.commit()
-            
-            return {
-                'cleaned': len(old_screenshots),
-                'dry_run': False
-            }
+            return 'Unknown'
     
-    def search_screenshots(self, query):
-        """Search within screenshot OCR text"""
+    def organize_screenshots_by_date(self, destination_base):
+        """
+        Organize screenshots into folders by date
+        destination_base: Base folder for organization (e.g., ~/Pictures/Screenshots)
+        """
         cursor = self.db.conn.cursor()
-        cursor.execute("""
-            SELECT id, filename, path, ocr_text, created_date
-            FROM files
-            WHERE is_screenshot = 1
-            AND ocr_text LIKE ?
-            AND status = 'active'
-            AND hide_from_app = 0
-            ORDER BY created_date DESC
-            LIMIT 20
-        """, (f'%{query}%',))
         
-        results = []
-        for row in cursor.fetchall():
-            results.append({
-                'id': row[0],
-                'filename': row[1],
-                'path': row[2],
-                'ocr_preview': row[3][:100] + '...' if row[3] and len(row[3]) > 100 else row[3],
-                'created': row[4]
+        cursor.execute("""
+            SELECT f.id, f.path, f.filename, f.modified_date
+            FROM files f
+            WHERE f.is_screenshot = 1
+              AND f.status = 'active'
+            ORDER BY f.modified_date DESC
+        """)
+        
+        screenshots = cursor.fetchall()
+        operations = []
+        
+        for file_id, path, filename, modified_date in screenshots:
+            # Parse date
+            date = datetime.fromisoformat(modified_date)
+            
+            # Create destination folder: YYYY/MM/
+            year_folder = os.path.join(destination_base, str(date.year))
+            month_folder = os.path.join(year_folder, f"{date.month:02d}-{date.strftime('%B')}")
+            
+            # New path
+            new_path = os.path.join(month_folder, filename)
+            
+            operations.append({
+                'file_id': file_id,
+                'old_path': path,
+                'new_path': new_path,
+                'folder': month_folder
             })
         
+        return operations
+    
+    def organize_screenshots_by_content(self, destination_base):
+        """
+        Organize screenshots by detected content (if OCR available)
+        """
+        if not OCR_AVAILABLE:
+            return []
+        
+        cursor = self.db.conn.cursor()
+        
+        cursor.execute("""
+            SELECT f.id, f.path, f.filename, sm.extracted_text
+            FROM files f
+            JOIN screenshot_metadata sm ON f.id = sm.file_id
+            WHERE f.is_screenshot = 1
+              AND f.status = 'active'
+              AND sm.has_text = 1
+        """)
+        
+        screenshots = cursor.fetchall()
+        operations = []
+        
+        for file_id, path, filename, text in screenshots:
+            # Simple content classification
+            category = self._classify_screenshot_content(text)
+            
+            # Create destination folder
+            dest_folder = os.path.join(destination_base, category)
+            new_path = os.path.join(dest_folder, filename)
+            
+            operations.append({
+                'file_id': file_id,
+                'old_path': path,
+                'new_path': new_path,
+                'folder': dest_folder,
+                'category': category
+            })
+        
+        return operations
+    
+    def _classify_screenshot_content(self, text):
+        """Classify screenshot content based on extracted text"""
+        if not text:
+            return "Uncategorized"
+        
+        text_lower = text.lower()
+        
+        # Check for common keywords
+        if any(word in text_lower for word in ['error', 'exception', 'failed', 'warning']):
+            return "Errors"
+        elif any(word in text_lower for word in ['code', 'function', 'class', 'import', 'def']):
+            return "Code"
+        elif any(word in text_lower for word in ['email', 'subject:', 'from:', 'to:']):
+            return "Emails"
+        elif any(word in text_lower for word in ['tweet', 'twitter', 'retweet', '@']):
+            return "Social Media"
+        elif any(word in text_lower for word in ['meeting', 'zoom', 'calendar', 'schedule']):
+            return "Meetings"
+        elif any(word in text_lower for word in ['receipt', 'invoice', 'payment', '$', 'total:']):
+            return "Receipts"
+        elif any(word in text_lower for word in ['article', 'blog', 'read', 'author']):
+            return "Articles"
+        else:
+            return "General"
+    
+    def search_screenshots(self, query):
+        """
+        Search screenshots by OCR text
+        """
+        cursor = self.db.conn.cursor()
+        
+        search_pattern = f"%{query}%"
+        cursor.execute("""
+            SELECT f.id, f.path, f.filename, f.modified_date, sm.extracted_text
+            FROM files f
+            JOIN screenshot_metadata sm ON f.id = sm.file_id
+            WHERE f.is_screenshot = 1
+              AND f.status = 'active'
+              AND sm.extracted_text LIKE ?
+            ORDER BY f.modified_date DESC
+        """, (search_pattern,))
+        
+        columns = ['id', 'path', 'filename', 'modified_date', 'text']
+        results = []
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+        
         return results
+    
+    def get_screenshot_stats(self):
+        """Get statistics about screenshots"""
+        cursor = self.db.conn.cursor()
+        
+        stats = {}
+        
+        # Total screenshots
+        cursor.execute("""
+            SELECT COUNT(*), SUM(size)
+            FROM files
+            WHERE is_screenshot = 1 AND status = 'active'
+        """)
+        
+        row = cursor.fetchone()
+        stats['total_count'] = row[0] or 0
+        stats['total_size_mb'] = (row[1] or 0) / (1024 * 1024)
+        
+        # Screenshots with text
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM screenshot_metadata
+            WHERE has_text = 1
+        """)
+        stats['with_text'] = cursor.fetchone()[0] or 0
+        
+        # By source app
+        cursor.execute("""
+            SELECT source_app, COUNT(*)
+            FROM screenshot_metadata
+            GROUP BY source_app
+        """)
+        stats['by_app'] = dict(cursor.fetchall())
+        
+        # Recent screenshots (last 7 days)
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM files
+            WHERE is_screenshot = 1
+              AND status = 'active'
+              AND modified_date > ?
+        """, ((datetime.now().replace(day=datetime.now().day-7)).isoformat(),))
+        
+        stats['recent_7days'] = cursor.fetchone()[0] or 0
+        
+        return stats
+    
+    def find_duplicate_screenshots(self):
+        """
+        Find screenshots that might be duplicates
+        (This is a simple version - visual similarity would be better)
+        """
+        cursor = self.db.conn.cursor()
+        
+        # Find screenshots with same size and similar dates
+        cursor.execute("""
+            SELECT f1.id, f1.path, f1.filename, f1.size, f1.modified_date,
+                   f2.id, f2.path, f2.filename
+            FROM files f1
+            JOIN files f2 ON f1.size = f2.size 
+                         AND f1.id < f2.id
+                         AND ABS(JULIANDAY(f1.modified_date) - JULIANDAY(f2.modified_date)) < 0.01
+            WHERE f1.is_screenshot = 1 
+              AND f2.is_screenshot = 1
+              AND f1.status = 'active'
+              AND f2.status = 'active'
+        """)
+        
+        duplicates = []
+        for row in cursor.fetchall():
+            duplicates.append({
+                'file1_id': row[0],
+                'file1_path': row[1],
+                'file1_name': row[2],
+                'size': row[3],
+                'file2_id': row[5],
+                'file2_path': row[6],
+                'file2_name': row[7]
+            })
+        
+        return duplicates
 
 
 if __name__ == "__main__":
-    print("📸 Screenshot Manager")
-    print("="*60)
-    
+    # Test the screenshot manager
     from file_indexer import FileDatabase
-    from ocr_processor import OCRProcessor
+    
+    print("Testing Screenshot Manager...")
+    print(f"OCR Available: {OCR_AVAILABLE}")
     
     db = FileDatabase()
-    ocr = OCRProcessor(db)
-    screenshots = ScreenshotManager(db, ocr)
+    manager = ScreenshotManager(db)
     
-    # Find all screenshots
-    all_screenshots = screenshots.get_all_screenshots()
-    print(f"\n📷 Found {len(all_screenshots)} screenshot(s)")
+    # Detect screenshots
+    print("\n🔍 Detecting screenshots in database...")
+    count = manager.detect_screenshots_in_database()
+    print(f"Found and marked {count} screenshots")
     
-    if all_screenshots:
-        print("\n Recent screenshots:\n")
-        for s in all_screenshots[:5]:
-            print(f"   • {s['filename']}")
-            print(f"     Created: {s['created'][:10] if s['created'] else 'unknown'}")
-            if s['ocr_text']:
-                preview = s['ocr_text'][:60] + '...' if len(s['ocr_text']) > 60 else s['ocr_text']
-                print(f"     OCR: {preview}")
-            print()
+    # Get stats
+    print("\n📊 Screenshot Statistics:")
+    stats = manager.get_screenshot_stats()
+    print(f"Total screenshots: {stats['total_count']}")
+    print(f"Total size: {stats['total_size_mb']:.2f} MB")
+    print(f"With extracted text: {stats['with_text']}")
+    print(f"Recent (7 days): {stats['recent_7days']}")
     
-    # Check for cleanup
-    cleanup_info = screenshots.cleanup_old_screenshots(days=30, dry_run=True)
-    if cleanup_info['would_clean'] > 0:
-        print(f"\n💡 {cleanup_info['would_clean']} screenshots older than 30 days could be cleaned")
+    if stats['by_app']:
+        print("\nBy app:")
+        for app, count in stats['by_app'].items():
+            print(f"  - {app}: {count}")
     
     db.close()
-
+    print("\n✅ Screenshot manager test complete!")

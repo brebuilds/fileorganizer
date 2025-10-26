@@ -1,214 +1,381 @@
 #!/usr/bin/env python3
 """
-Smart Reminders & Nudges System
-Proactive notifications for files and tasks
+Reminder System for File Organizer
+Smart reminders, nudges, and deadline tracking
 """
 
+import os
 from datetime import datetime, timedelta
-import json
+from dateutil import parser
+import sqlite3
 
 
 class ReminderSystem:
-    """Manage file reminders and smart nudges"""
+    """Manages file-based reminders and context-aware nudges"""
     
-    def __init__(self, file_db):
-        self.db = file_db
+    def __init__(self, db):
+        self.db = db
     
-    def create_reminder(self, file_id, reminder_date, message, reminder_type='manual'):
+    def create_reminder(self, file_id, reminder_type, reminder_date, message=None):
         """
         Create a reminder for a file
         
-        Args:
-            file_id: File database ID
-            reminder_date: When to trigger (ISO format or datetime)
-            message: Reminder message
-            reminder_type: Type of reminder (manual, auto, nudge)
+        reminder_type: 'deadline', 'follow_up', 'review', 'archive', 'custom'
         """
-        if isinstance(reminder_date, datetime):
-            reminder_date = reminder_date.isoformat()
-        
         cursor = self.db.conn.cursor()
+        
+        # Parse date if it's a string
+        if isinstance(reminder_date, str):
+            reminder_date = self._parse_date(reminder_date)
+        
         cursor.execute("""
-            INSERT INTO reminders (file_id, reminder_type, reminder_date, message, created_date, is_active)
-            VALUES (?, ?, ?, ?, ?, 1)
-        """, (file_id, reminder_type, reminder_date, message, datetime.now().isoformat()))
+            INSERT INTO reminders 
+            (file_id, reminder_type, reminder_date, message, is_active, created_date)
+            VALUES (?, ?, ?, ?, 1, ?)
+        """, (
+            file_id,
+            reminder_type,
+            reminder_date.isoformat() if isinstance(reminder_date, datetime) else reminder_date,
+            message,
+            datetime.now().isoformat()
+        ))
         
         self.db.conn.commit()
         return cursor.lastrowid
     
-    def get_due_reminders(self):
-        """Get all reminders that are due now"""
+    def _parse_date(self, date_str):
+        """Parse natural language dates"""
+        date_str = date_str.lower().strip()
+        now = datetime.now()
+        
+        # Relative dates
+        if 'tomorrow' in date_str:
+            return now + timedelta(days=1)
+        elif 'next week' in date_str:
+            return now + timedelta(weeks=1)
+        elif 'next month' in date_str:
+            return now + timedelta(days=30)
+        elif 'in' in date_str:
+            # "in 3 days", "in 2 weeks", "in 1 month"
+            parts = date_str.split()
+            if len(parts) >= 3:
+                try:
+                    num = int(parts[1])
+                    unit = parts[2]
+                    if 'day' in unit:
+                        return now + timedelta(days=num)
+                    elif 'week' in unit:
+                        return now + timedelta(weeks=num)
+                    elif 'month' in unit:
+                        return now + timedelta(days=num*30)
+                    elif 'hour' in unit:
+                        return now + timedelta(hours=num)
+                except:
+                    pass
+        
+        # Try to parse as date
+        try:
+            return parser.parse(date_str)
+        except:
+            # Default to tomorrow if can't parse
+            return now + timedelta(days=1)
+    
+    def get_due_reminders(self, include_overdue=True):
+        """Get all reminders that are due or overdue"""
         cursor = self.db.conn.cursor()
+        
         now = datetime.now().isoformat()
         
-        cursor.execute("""
-            SELECT r.id, r.file_id, r.reminder_type, r.reminder_date, r.message,
-                   f.filename, f.path
-            FROM reminders r
-            LEFT JOIN files f ON r.file_id = f.id
-            WHERE r.is_active = 1
-            AND r.reminder_date <= ?
-            ORDER BY r.reminder_date
-        """, (now,))
+        if include_overdue:
+            cursor.execute("""
+                SELECT r.id, r.file_id, r.reminder_type, r.reminder_date, r.message,
+                       f.filename, f.path, f.project
+                FROM reminders r
+                JOIN files f ON r.file_id = f.id
+                WHERE r.is_active = 1 
+                  AND r.reminder_date <= ?
+                  AND r.triggered_date IS NULL
+                ORDER BY r.reminder_date ASC
+            """, (now,))
+        else:
+            cursor.execute("""
+                SELECT r.id, r.file_id, r.reminder_type, r.reminder_date, r.message,
+                       f.filename, f.path, f.project
+                FROM reminders r
+                JOIN files f ON r.file_id = f.id
+                WHERE r.is_active = 1 
+                  AND r.reminder_date <= ?
+                  AND r.reminder_date >= ?
+                  AND r.triggered_date IS NULL
+                ORDER BY r.reminder_date ASC
+            """, (now, datetime.now().date().isoformat()))
         
-        reminders = []
+        columns = ['id', 'file_id', 'reminder_type', 'reminder_date', 'message',
+                   'filename', 'path', 'project']
+        results = []
         for row in cursor.fetchall():
-            reminders.append({
-                'id': row[0],
-                'file_id': row[1],
-                'type': row[2],
-                'reminder_date': row[3],
-                'message': row[4],
-                'filename': row[5],
-                'path': row[6]
-            })
+            results.append(dict(zip(columns, row)))
         
-        return reminders
+        return results
     
-    def mark_triggered(self, reminder_id):
+    def mark_reminder_triggered(self, reminder_id):
         """Mark a reminder as triggered"""
         cursor = self.db.conn.cursor()
         cursor.execute("""
             UPDATE reminders
-            SET is_active = 0, triggered_date = ?
+            SET triggered_date = ?
             WHERE id = ?
         """, (datetime.now().isoformat(), reminder_id))
         self.db.conn.commit()
     
-    def generate_smart_nudges(self):
-        """Generate automatic nudges based on file patterns"""
+    def dismiss_reminder(self, reminder_id):
+        """Dismiss/deactivate a reminder"""
+        cursor = self.db.conn.cursor()
+        cursor.execute("""
+            UPDATE reminders
+            SET is_active = 0
+            WHERE id = ?
+        """, (reminder_id,))
+        self.db.conn.commit()
+    
+    def snooze_reminder(self, reminder_id, snooze_duration_minutes=60):
+        """Snooze a reminder"""
+        cursor = self.db.conn.cursor()
+        
+        # Get current reminder date
+        cursor.execute("SELECT reminder_date FROM reminders WHERE id = ?", (reminder_id,))
+        current_date = cursor.fetchone()[0]
+        
+        # Add snooze duration
+        new_date = datetime.fromisoformat(current_date) + timedelta(minutes=snooze_duration_minutes)
+        
+        cursor.execute("""
+            UPDATE reminders
+            SET reminder_date = ?, triggered_date = NULL
+            WHERE id = ?
+        """, (new_date.isoformat(), reminder_id))
+        
+        self.db.conn.commit()
+    
+    def get_nudges(self, limit=5):
+        """
+        Generate context-aware nudges based on learned patterns
+        Returns proactive suggestions for the user
+        """
         nudges = []
         cursor = self.db.conn.cursor()
         
-        # Nudge 1: Files not accessed in 2+ weeks
-        two_weeks_ago = (datetime.now() - timedelta(days=14)).isoformat()
+        # Nudge 1: Files you haven't touched in a while from active projects
         cursor.execute("""
-            SELECT id, filename, path, last_accessed
-            FROM files
-            WHERE last_accessed < ?
-            AND ai_tags LIKE '%important%'
-            AND status = 'active'
-            AND hide_from_app = 0
+            SELECT f.id, f.filename, f.path, f.project, f.last_accessed
+            FROM files f
+            WHERE f.project IS NOT NULL 
+              AND f.project != ''
+              AND f.status = 'active'
+              AND (f.last_accessed IS NULL OR f.last_accessed < ?)
+            ORDER BY f.modified_date DESC
             LIMIT 5
-        """, (two_weeks_ago,))
+        """, ((datetime.now() - timedelta(days=7)).isoformat(),))
         
         for row in cursor.fetchall():
+            file_id, filename, path, project, last_accessed = row
             nudges.append({
-                'type': 'unaccessed_important',
-                'file_id': row[0],
-                'filename': row[1],
-                'path': row[2],
-                'message': f"You haven't looked at '{row[1]}' in 2+ weeks. Still important?"
+                'type': 'stale_project_file',
+                'priority': 7,
+                'message': f"📂 Haven't opened '{filename}' from {project} in a week",
+                'file_id': file_id,
+                'path': path,
+                'action': 'review'
             })
         
-        # Nudge 2: Old files in Downloads
-        thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
-        cursor.execute("""
-            SELECT id, filename, path, created_date
-            FROM files
-            WHERE folder_location LIKE '%Downloads%'
-            AND created_date < ?
-            AND status = 'active'
-            AND hide_from_app = 0
-            LIMIT 5
-        """, (thirty_days_ago,))
+        # Nudge 2: Messy folders (>20 files in Downloads/Desktop)
+        common_folders = [
+            os.path.expanduser("~/Downloads"),
+            os.path.expanduser("~/Desktop"),
+            os.path.expanduser("~/Documents")
+        ]
         
-        for row in cursor.fetchall():
-            nudges.append({
-                'type': 'old_download',
-                'file_id': row[0],
-                'filename': row[1],
-                'path': row[2],
-                'message': f"'{row[1]}' has been in Downloads for 30+ days. Archive it?"
-            })
+        for folder in common_folders:
+            cursor.execute("""
+                SELECT COUNT(*) FROM files
+                WHERE folder_location = ?
+                  AND status = 'active'
+            """, (folder,))
+            
+            count = cursor.fetchone()[0]
+            if count > 20:
+                nudges.append({
+                    'type': 'messy_folder',
+                    'priority': 8,
+                    'message': f"🧹 {os.path.basename(folder)} has {count} files - time to organize?",
+                    'folder': folder,
+                    'file_count': count,
+                    'action': 'organize'
+                })
         
-        # Nudge 3: Untagged files
+        # Nudge 3: Files without tags from last week
         cursor.execute("""
-            SELECT id, filename, path
-            FROM files
+            SELECT COUNT(*) FROM files
             WHERE (ai_tags IS NULL OR ai_tags = '')
-            AND status = 'active'
-            AND hide_from_app = 0
-            LIMIT 5
+              AND modified_date > ?
+              AND status = 'active'
+        """, ((datetime.now() - timedelta(days=7)).isoformat(),))
+        
+        untagged_count = cursor.fetchone()[0]
+        if untagged_count > 5:
+            nudges.append({
+                'type': 'untagged_files',
+                'priority': 5,
+                'message': f"🏷️ {untagged_count} recent files need AI tagging",
+                'count': untagged_count,
+                'action': 'tag'
+            })
+        
+        # Nudge 4: Duplicate files taking up space
+        cursor.execute("""
+            SELECT COUNT(*), SUM(size) FROM files
+            WHERE is_duplicate = 1
+              AND status = 'active'
         """)
         
-        for row in cursor.fetchall():
+        dup_row = cursor.fetchone()
+        if dup_row and dup_row[0] > 0:
+            dup_count, dup_size = dup_row
+            dup_size_mb = (dup_size or 0) / (1024 * 1024)
+            if dup_size_mb > 10:
+                nudges.append({
+                    'type': 'duplicates',
+                    'priority': 6,
+                    'message': f"📦 {dup_count} duplicate files using {dup_size_mb:.1f} MB",
+                    'count': dup_count,
+                    'size_mb': dup_size_mb,
+                    'action': 'clean_duplicates'
+                })
+        
+        # Nudge 5: Screenshots piling up
+        cursor.execute("""
+            SELECT COUNT(*) FROM files
+            WHERE is_screenshot = 1
+              AND status = 'active'
+              AND modified_date > ?
+        """, ((datetime.now() - timedelta(days=7)).isoformat(),))
+        
+        screenshot_count = cursor.fetchone()[0]
+        if screenshot_count > 10:
             nudges.append({
-                'type': 'untagged',
-                'file_id': row[0],
-                'filename': row[1],
-                'path': row[2],
-                'message': f"'{row[1]}' hasn't been tagged yet. Want me to AI-tag it?"
+                'type': 'screenshots',
+                'priority': 6,
+                'message': f"📸 {screenshot_count} screenshots from last week - organize them?",
+                'count': screenshot_count,
+                'action': 'organize_screenshots'
             })
         
-        return nudges
+        # Sort by priority and limit
+        nudges.sort(key=lambda x: x['priority'], reverse=True)
+        return nudges[:limit]
     
-    def get_upcoming_reminders(self, days=7):
+    def get_upcoming_reminders(self, days_ahead=7):
         """Get reminders coming up in the next N days"""
         cursor = self.db.conn.cursor()
+        
         now = datetime.now().isoformat()
-        future = (datetime.now() + timedelta(days=days)).isoformat()
+        future = (datetime.now() + timedelta(days=days_ahead)).isoformat()
         
         cursor.execute("""
             SELECT r.id, r.file_id, r.reminder_type, r.reminder_date, r.message,
-                   f.filename, f.path
+                   f.filename, f.path, f.project
             FROM reminders r
-            LEFT JOIN files f ON r.file_id = f.id
-            WHERE r.is_active = 1
-            AND r.reminder_date BETWEEN ? AND ?
-            ORDER BY r.reminder_date
+            JOIN files f ON r.file_id = f.id
+            WHERE r.is_active = 1 
+              AND r.reminder_date > ?
+              AND r.reminder_date <= ?
+              AND r.triggered_date IS NULL
+            ORDER BY r.reminder_date ASC
         """, (now, future))
         
-        reminders = []
+        columns = ['id', 'file_id', 'reminder_type', 'reminder_date', 'message',
+                   'filename', 'path', 'project']
+        results = []
         for row in cursor.fetchall():
-            reminders.append({
-                'id': row[0],
-                'file_id': row[1],
-                'type': row[2],
-                'reminder_date': row[3],
-                'message': row[4],
-                'filename': row[5],
-                'path': row[6]
+            results.append(dict(zip(columns, row)))
+        
+        return results
+    
+    def check_and_notify(self):
+        """
+        Check for due reminders and generate notifications
+        Returns list of reminders that should be shown to user
+        """
+        due_reminders = self.get_due_reminders()
+        
+        notifications = []
+        for reminder in due_reminders:
+            # Determine notification message
+            if reminder['message']:
+                msg = reminder['message']
+            else:
+                msg = f"Reminder: {reminder['filename']}"
+            
+            # Calculate how overdue
+            reminder_date = datetime.fromisoformat(reminder['reminder_date'])
+            now = datetime.now()
+            overdue_hours = (now - reminder_date).total_seconds() / 3600
+            
+            if overdue_hours > 24:
+                urgency = "overdue"
+                days = int(overdue_hours / 24)
+                msg += f" (overdue by {days} day{'s' if days > 1 else ''})"
+            elif overdue_hours > 1:
+                urgency = "due"
+                msg += f" (due {int(overdue_hours)} hours ago)"
+            else:
+                urgency = "due_now"
+            
+            notifications.append({
+                'id': reminder['id'],
+                'message': msg,
+                'urgency': urgency,
+                'file_id': reminder['file_id'],
+                'filename': reminder['filename'],
+                'path': reminder['path'],
+                'type': reminder['reminder_type']
             })
         
-        return reminders
-    
-    def cancel_reminder(self, reminder_id):
-        """Cancel a reminder"""
-        cursor = self.db.conn.cursor()
-        cursor.execute("UPDATE reminders SET is_active = 0 WHERE id = ?", (reminder_id,))
-        self.db.conn.commit()
+        return notifications
 
 
 if __name__ == "__main__":
-    print("🔔 Reminder & Nudge System")
-    print("="*60)
-    
+    # Test the reminder system
     from file_indexer import FileDatabase
     
-    db = FileDatabase()
-    reminders = ReminderSystem(db)
+    print("Testing Reminder System...")
     
-    # Check for due reminders
-    due = reminders.get_due_reminders()
-    print(f"\n⏰ Due Reminders: {len(due)}")
+    db = FileDatabase()
+    reminder_system = ReminderSystem(db)
+    
+    # Get nudges
+    print("\n📢 Current Nudges:")
+    nudges = reminder_system.get_nudges()
+    for i, nudge in enumerate(nudges, 1):
+        print(f"{i}. [{nudge['priority']}] {nudge['message']}")
+    
+    # Get due reminders
+    print("\n⏰ Due Reminders:")
+    due = reminder_system.get_due_reminders()
+    if due:
+        for reminder in due:
+            print(f"- {reminder['filename']}: {reminder['message']}")
+    else:
+        print("No reminders due")
     
     # Get upcoming reminders
-    upcoming = reminders.get_upcoming_reminders(days=7)
-    print(f"📅 Upcoming (7 days): {len(upcoming)}")
-    
-    # Generate smart nudges
-    print("\n💡 Generating smart nudges...")
-    nudges = reminders.generate_smart_nudges()
-    
-    if nudges:
-        print(f"\n🎯 Smart Nudges ({len(nudges)}):\n")
-        for nudge in nudges[:5]:
-            print(f"   • {nudge['message']}")
-            print(f"     File: {nudge['filename']}")
-            print()
+    print("\n📅 Upcoming (Next 7 Days):")
+    upcoming = reminder_system.get_upcoming_reminders(7)
+    if upcoming:
+        for reminder in upcoming:
+            print(f"- {reminder['reminder_date']}: {reminder['filename']}")
     else:
-        print("✨ No nudges needed - everything looks good!")
+        print("No upcoming reminders")
     
     db.close()
-
+    print("\n✅ Reminder system test complete!")

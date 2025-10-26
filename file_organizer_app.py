@@ -807,6 +807,7 @@ class MainWindow(QMainWindow):
         # Add tabs
         self.tabs.addTab(self.chat_widget, "💬 Chat")
         self.tabs.addTab(self.activity_log, "📋 Activity Log")
+        self.tabs.addTab(self.create_guide_tab(), "📚 Guide")
         self.tabs.addTab(self.create_settings_tab(), "⚙️ Settings")
         
         self.setCentralWidget(self.tabs)
@@ -819,6 +820,156 @@ class MainWindow(QMainWindow):
             Qt.WindowType.Window |
             Qt.WindowType.WindowStaysOnTopHint
         )
+    
+    def create_guide_tab(self):
+        """Create the guide/tips tab"""
+        guide_widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        
+        main_layout = QVBoxLayout()
+        
+        # Header
+        header = QLabel("📚 File Organizer v4.0 - Complete Guide")
+        header.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px 0;")
+        main_layout.addWidget(header)
+        
+        intro = QLabel(
+            "Welcome to your ADHD-friendly file organizer! Here's everything you can do:"
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #666; margin-bottom: 20px;")
+        main_layout.addWidget(intro)
+        
+        # Feature guides
+        features_guide = [
+            ("💬 Chat with Your Files", 
+             "Natural language interface to find and organize files",
+             "• Type: 'find my invoice from last week'\n"
+             "• Type: 'index my documents folder'\n"
+             "• Type: 'what files did I download yesterday?'"),
+            
+            ("🔍 Smart Search",
+             "Find files by content, not just name",
+             "• Full-text search inside documents\n"
+             "• Vector search for semantic meaning\n"
+             "• Temporal queries: 'files from yesterday'"),
+            
+            ("📅 Smart Reminders",
+             "Never forget important files",
+             "• CLI: ./o REMIND to view reminders\n"
+             "• CLI: ./o SUGGEST for smart nudges\n"
+             "• Auto-reminds about stale files"),
+            
+            ("📸 Screenshot Management",
+             "Organize screenshots automatically",
+             "• Auto-detects screenshots\n"
+             "• OCR extracts text from images\n"
+             "• CLI: ./o SCREENSHOTS to manage"),
+            
+            ("🔄 Duplicate Detection",
+             "Clean up duplicate files",
+             "• Hash-based detection\n"
+             "• CLI: ./o DUPES to find duplicates\n"
+             "• Shows original vs duplicate"),
+            
+            ("📁 Smart Folders",
+             "Dynamic folders that auto-update",
+             "• CLI: ./o SMART to view smart folders\n"
+             "• Create custom rules\n"
+             "• 6 default smart folders included"),
+            
+            ("📦 Bulk Operations",
+             "Mass operations with preview & undo",
+             "• CLI: ./o BULK for operations\n"
+             "• Preview before executing\n"
+             "• Full undo capability"),
+            
+            ("🗑️ Trash Recovery",
+             "30-day file recovery window",
+             "• CLI: ./o TRASH to view deleted files\n"
+             "• Recover deleted files easily\n"
+             "• Auto-cleanup after 30 days"),
+            
+            ("⏰ File Aging",
+             "Auto-archive old files",
+             "• CLI: ./o AGING to manage rules\n"
+             "• Set age thresholds\n"
+             "• Auto-move to archive"),
+            
+            ("🔖 Bookmark Manager",
+             "Save and organize URLs",
+             "• CLI: ./o BOOKMARKS to manage\n"
+             "• Extract metadata from URLs\n"
+             "• Link bookmarks to files"),
+            
+            ("🤖 AI Features",
+             "Powered by local AI (Ollama)",
+             "• Auto-tagging with keywords\n"
+             "• Smart file summaries\n"
+             "• Project detection"),
+            
+            ("🔧 External Integrations",
+             "Connect with your tools",
+             "• Alfred, Raycast workflows\n"
+             "• Hazel rules generation\n"
+             "• REST API for automations"),
+            
+            ("📤 Export Tools",
+             "Export your file structure",
+             "• CSV or JSON format\n"
+             "• Complete file catalog\n"
+             "• Settings → Export button"),
+            
+            ("⚡ CLI Commands",
+             "Powerful command-line interface",
+             "• ./o HELP - Show all commands\n"
+             "• ./o @Desktop - Organize Desktop\n"
+             "• ./o ?invoice - Search for files\n"
+             "• ./o !yesterday - Files from yesterday\n"
+             "• ./o STATS - Show statistics"),
+        ]
+        
+        for title, description, details in features_guide:
+            # Feature group
+            group = QGroupBox(title)
+            group_layout = QVBoxLayout()
+            
+            desc_label = QLabel(description)
+            desc_label.setStyleSheet("font-style: italic; color: #666; margin-bottom: 5px;")
+            desc_label.setWordWrap(True)
+            group_layout.addWidget(desc_label)
+            
+            details_label = QLabel(details)
+            details_label.setWordWrap(True)
+            details_label.setStyleSheet("font-family: monospace; font-size: 11px; padding: 5px;")
+            group_layout.addWidget(details_label)
+            
+            group.setLayout(group_layout)
+            main_layout.addWidget(group)
+        
+        # Quick Tips section
+        tips_group = QGroupBox("💡 Quick Tips")
+        tips_layout = QVBoxLayout()
+        tips_text = QLabel(
+            "• Use Settings tab to enable/disable features\n"
+            "• Check Activity Log to see what's happening\n"
+            "• Index folders before searching for files\n"
+            "• Install Ollama for AI features: https://ollama.ai\n"
+            "• Use ./o HELP in terminal for CLI reference\n"
+            "• Hover over checkboxes in Settings for tooltips"
+        )
+        tips_text.setWordWrap(True)
+        tips_layout.addWidget(tips_text)
+        tips_group.setLayout(tips_layout)
+        main_layout.addWidget(tips_group)
+        
+        main_layout.addStretch()
+        
+        guide_widget.setLayout(main_layout)
+        scroll.setWidget(guide_widget)
+        
+        return scroll
     
     def create_settings_tab(self):
         """Create the settings panel"""
@@ -863,8 +1014,8 @@ class MainWindow(QMainWindow):
         projects_group.setLayout(projects_layout)
         main_layout.addWidget(projects_group)
         
-        # Assistant Name Section
-        assistant_group = QGroupBox("Assistant Identity")
+        # Assistant Identity & Personality Section
+        assistant_group = QGroupBox("Assistant Identity & Personality")
         assistant_layout = QVBoxLayout()
         
         assistant_label = QLabel("Assistant Name:")
@@ -874,6 +1025,16 @@ class MainWindow(QMainWindow):
         
         assistant_layout.addWidget(assistant_label)
         assistant_layout.addWidget(self.assistant_name_input)
+        assistant_layout.addSpacing(10)
+        
+        tone_label = QLabel("Conversation Style:")
+        self.tone_combo = QComboBox()
+        self.tone_combo.addItems(["Casual & Friendly", "Professional", "Concise"])
+        current_tone = self.get_setting('tone', 'Casual & Friendly')
+        self.tone_combo.setCurrentText(current_tone)
+        
+        assistant_layout.addWidget(tone_label)
+        assistant_layout.addWidget(self.tone_combo)
         assistant_group.setLayout(assistant_layout)
         main_layout.addWidget(assistant_group)
         
@@ -912,20 +1073,40 @@ class MainWindow(QMainWindow):
         appearance_group.setLayout(appearance_layout)
         main_layout.addWidget(appearance_group)
         
-        # Personality Section
-        personality_group = QGroupBox("Personality")
-        personality_layout = QVBoxLayout()
+        # Features Section - Toggle all v4.0 features
+        features_group = QGroupBox("✨ Features (v4.0)")
+        features_layout = QVBoxLayout()
+        features_hint = QLabel("Enable or disable features. All are ON by default.")
+        features_hint.setStyleSheet("color: #666; font-size: 11px; font-style: italic; margin-bottom: 10px;")
+        features_layout.addWidget(features_hint)
         
-        tone_label = QLabel("Conversation Style:")
-        self.tone_combo = QComboBox()
-        self.tone_combo.addItems(["Casual & Friendly", "Professional", "Concise"])
-        current_tone = self.get_setting('tone', 'Casual & Friendly')
-        self.tone_combo.setCurrentText(current_tone)
+        self.feature_checks = {}
+        features = [
+            ("Smart Reminders & Nudges", "Get reminders for important files and context-aware suggestions", True),
+            ("Screenshot Management", "Auto-detect, OCR, and organize screenshots", True),
+            ("Duplicate Detection", "Find and clean up duplicate files", True),
+            ("Smart Folders", "Dynamic folders that auto-update based on rules", True),
+            ("Bulk Operations", "Mass file operations with preview and undo", True),
+            ("Trash Recovery", "30-day file recovery window", True),
+            ("File Aging System", "Auto-archive old files", True),
+            ("Bookmark Manager", "Save and organize URLs with metadata", True),
+            ("Temporal Queries", "Search by time: 'files from yesterday'", True),
+            ("Vector Search", "Semantic search by meaning, not just keywords", True),
+            ("Graph Relationships", "Track connections between files", True),
+            ("AI Tagging", "Automatic file categorization with AI", True),
+            ("Conversation AI", "Natural language file assistant", True),
+            ("Export Tools", "Export file catalogs to CSV/JSON", True),
+        ]
         
-        personality_layout.addWidget(tone_label)
-        personality_layout.addWidget(self.tone_combo)
-        personality_group.setLayout(personality_layout)
-        main_layout.addWidget(personality_group)
+        for feature_name, tooltip, default_enabled in features:
+            check = QCheckBox(feature_name)
+            check.setChecked(self.get_setting(f'feature_{feature_name.lower().replace(" ", "_")}', default_enabled))
+            check.setToolTip(tooltip)
+            self.feature_checks[feature_name] = check
+            features_layout.addWidget(check)
+        
+        features_group.setLayout(features_layout)
+        main_layout.addWidget(features_group)
         
         # Auto-Organization Section
         auto_org_group = QGroupBox("Auto-Organization")
@@ -1262,6 +1443,11 @@ class MainWindow(QMainWindow):
         self.user_profile['settings']['use_openai'] = self.get_setting('use_openai', False)
         self.user_profile['settings']['openai_api_key'] = self.openai_key_input.text()
         self.user_profile['settings']['api_enabled'] = self.api_enabled_check.isChecked()
+        
+        # Save feature toggles
+        for feature_name, check in self.feature_checks.items():
+            setting_key = f'feature_{feature_name.lower().replace(" ", "_")}'
+            self.user_profile['settings'][setting_key] = check.isChecked()
         
         # Save to file
         save_user_profile(self.user_profile)

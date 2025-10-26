@@ -615,6 +615,22 @@ class FileDatabase:
             results.append(dict(zip(columns, row)))
         return results
     
+    def get_learned_patterns_by_type(self, pattern_type):
+        """Get all learned patterns of a specific type"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT pattern_type, pattern_key, pattern_value, frequency, confidence, last_used
+            FROM learned_patterns
+            WHERE pattern_type = ?
+            ORDER BY last_used DESC, frequency DESC
+        """, (pattern_type,))
+        
+        columns = ['pattern_type', 'pattern_key', 'pattern_value', 'frequency', 'confidence', 'last_used']
+        results = []
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+        return results
+    
     def log_search(self, query, results_count, clicked_file_id=None, success=False):
         """Log a search for learning search patterns"""
         cursor = self.conn.cursor()

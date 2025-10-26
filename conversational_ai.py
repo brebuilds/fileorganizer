@@ -35,7 +35,8 @@ class ConversationalAI:
             'search_terms': {},
             'file_preferences': {},
             'organization_style': {},
-            'common_tasks': {}
+            'common_tasks': {},
+            'user_facts': {}
         }
         
         for pattern in patterns:
@@ -114,6 +115,43 @@ RECENT ACTIVITY INSIGHTS:"""
             if stats.get('by_folder'):
                 top_folders = sorted(stats['by_folder'].items(), key=lambda x: x[1], reverse=True)[:2]
                 context_prompt += f"\n- Main locations: {', '.join([f[0].split('/')[-1] for f in top_folders])}"
+        
+        # Add remembered user facts
+        user_facts = self.file_db.get_learned_patterns_by_type('user_facts')
+        if user_facts:
+            context_prompt += f"\n\nREMEMBERED ABOUT {name.upper()}:"
+            
+            # Group facts by category
+            facts_by_category = {}
+            for fact in user_facts:
+                category = fact['pattern_key']
+                if category not in facts_by_category:
+                    facts_by_category[category] = []
+                facts_by_category[category].append(fact['pattern_value'])
+            
+            # Display categorized facts
+            if 'work_context' in facts_by_category:
+                context_prompt += f"\n- Work/Role: {facts_by_category['work_context'][-1]}"  # Most recent
+            
+            if 'project_context' in facts_by_category:
+                recent_projects = facts_by_category['project_context'][-2:]  # Last 2
+                context_prompt += f"\n- Projects: {' | '.join(recent_projects)}"
+            
+            if 'file_habits' in facts_by_category:
+                habits = facts_by_category['file_habits'][-2:]  # Last 2
+                context_prompt += f"\n- Habits: {' | '.join(habits)}"
+            
+            if 'tools_used' in facts_by_category:
+                tools = set([t.split(':')[0] for t in facts_by_category['tools_used']])
+                context_prompt += f"\n- Tools: {', '.join(list(tools)[:5])}"
+            
+            if 'preferences' in facts_by_category:
+                prefs = facts_by_category['preferences'][-1]  # Most recent
+                context_prompt += f"\n- Note: {prefs}"
+            
+            if 'important_files' in facts_by_category:
+                important = facts_by_category['important_files'][-1]  # Most recent
+                context_prompt += f"\n- Important: {important}"
         
         context_prompt += f"""
 
@@ -266,8 +304,92 @@ NOW RESPOND TO THE USER'S ACTUAL MESSAGE:
                 confidence=0.6
             )
     
+    def extract_and_remember_facts(self, user_message):
+        """Extract personal facts and context from user messages"""
+        message_lower = user_message.lower()
+        
+        # Detect work/role information
+        work_phrases = ['i work', 'i\'m a', 'i am a', 'my job', 'i do', 'my role']
+        for phrase in work_phrases:
+            if phrase in message_lower:
+                # Store the context
+                self.file_db.learn_pattern(
+                    'user_facts',
+                    'work_context',
+                    user_message,
+                    confidence=0.9
+                )
+                break
+        
+        # Detect project mentions with context
+        project_phrases = ['working on', 'project called', 'client is', 'for my', 'building', 'creating']
+        for phrase in project_phrases:
+            if phrase in message_lower:
+                self.file_db.learn_pattern(
+                    'user_facts',
+                    'project_context',
+                    user_message,
+                    confidence=0.8
+                )
+                break
+        
+        # Detect file habits/preferences
+        habit_phrases = ['i usually', 'i always', 'i typically', 'i tend to', 'i like to', 'i prefer']
+        for phrase in habit_phrases:
+            if phrase in message_lower:
+                self.file_db.learn_pattern(
+                    'user_facts',
+                    'file_habits',
+                    user_message,
+                    confidence=0.8
+                )
+                break
+        
+        # Detect tool/app mentions
+        tool_keywords = ['use', 'using', 'with', 'in', 'from']
+        apps = ['notion', 'figma', 'photoshop', 'illustrator', 'sketch', 'vscode', 'xcode', 
+                'slack', 'discord', 'zoom', 'teams', 'chrome', 'safari', 'firefox']
+        for app in apps:
+            if app in message_lower:
+                for keyword in tool_keywords:
+                    if keyword in message_lower:
+                        self.file_db.learn_pattern(
+                            'user_facts',
+                            'tools_used',
+                            f"Uses {app}: {user_message[:100]}",
+                            confidence=0.7
+                        )
+                        break
+        
+        # Detect personal preferences
+        preference_phrases = ['i hate', 'i love', 'i don\'t like', 'drives me crazy', 'bothers me']
+        for phrase in preference_phrases:
+            if phrase in message_lower:
+                self.file_db.learn_pattern(
+                    'user_facts',
+                    'preferences',
+                    user_message,
+                    confidence=0.9
+                )
+                break
+        
+        # Detect specific file/folder mentions with importance
+        importance_phrases = ['important', 'critical', 'need to find', 'can\'t lose', 'must have']
+        for phrase in importance_phrases:
+            if phrase in message_lower:
+                self.file_db.learn_pattern(
+                    'user_facts',
+                    'important_files',
+                    user_message,
+                    confidence=0.9
+                )
+                break
+    
     async def chat_async(self, user_message, conversation_history):
         """Async chat with enhanced intelligence"""
+        # Extract and remember facts from user's message
+        self.extract_and_remember_facts(user_message)
+        
         # Detect intent
         intent = self.detect_intent(user_message)
         

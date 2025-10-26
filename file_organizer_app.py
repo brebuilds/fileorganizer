@@ -1255,11 +1255,17 @@ class MainWindow(QMainWindow):
         tools_header.setStyleSheet("font-weight: bold; font-size: 13px;")
         tools_layout.addWidget(tools_header)
         
+        # Privacy note for external tools
+        tools_privacy_note = QLabel("⚠️ Shares file metadata with apps")
+        tools_privacy_note.setStyleSheet("color: #FF9800; font-size: 10px; font-style: italic;")
+        tools_privacy_note.setWordWrap(True)
+        tools_layout.addWidget(tools_privacy_note)
+        
         self.tool_checks = {}
         external_tools = ['Alfred', 'Raycast', 'DevonThink', 'Hazel']
         for tool in external_tools:
             check = QCheckBox(tool)
-            check.setToolTip(f"Enable {tool} integration")
+            check.setToolTip(f"Enable {tool} integration\n⚠️ This may share file paths and metadata with {tool}")
             self.tool_checks[tool] = check
             tools_layout.addWidget(check)
         
@@ -1284,12 +1290,22 @@ class MainWindow(QMainWindow):
         openai_group = QGroupBox("🤖 AI Enhancements")
         openai_layout = QVBoxLayout()
         
-        openai_check = QCheckBox("Enable OpenAI for enhanced summaries")
-        openai_check.setToolTip(
+        # Privacy warning for OpenAI
+        openai_warning = QLabel("⚠️ PRIVACY NOTICE: Enabling OpenAI sends your file content to external servers")
+        openai_warning.setStyleSheet(
+            "background-color: #FFF3CD; color: #856404; padding: 8px; "
+            "border: 1px solid #FFC107; border-radius: 4px; font-weight: bold;"
+        )
+        openai_warning.setWordWrap(True)
+        openai_warning.setVisible(False)  # Hidden by default
+        
+        self.openai_check = QCheckBox("Enable OpenAI for enhanced summaries")
+        self.openai_check.setToolTip(
             "Use OpenAI API for better file summaries and content analysis.\n"
             "Requires OpenAI API key (costs apply)."
         )
-        openai_check.setChecked(self.get_setting('use_openai', False))
+        self.openai_check.setChecked(self.get_setting('use_openai', False))
+        self.openai_check.toggled.connect(lambda checked: openai_warning.setVisible(checked))
         
         openai_key_label = QLabel("OpenAI API Key:")
         self.openai_key_input = QLineEdit()
@@ -1297,9 +1313,15 @@ class MainWindow(QMainWindow):
         self.openai_key_input.setPlaceholderText("sk-...")
         self.openai_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         
-        openai_layout.addWidget(openai_check)
+        openai_layout.addWidget(openai_warning)
+        openai_layout.addWidget(self.openai_check)
         openai_layout.addWidget(openai_key_label)
         openai_layout.addWidget(self.openai_key_input)
+        
+        # Show warning if already enabled
+        if self.openai_check.isChecked():
+            openai_warning.setVisible(True)
+        
         openai_group.setLayout(openai_layout)
         main_layout.addWidget(openai_group)
         
@@ -1309,19 +1331,36 @@ class MainWindow(QMainWindow):
         
         automation_label = QLabel("Enable external automation and API access:")
         
+        # Privacy warning for REST API
+        api_warning = QLabel("⚠️ PRIVACY NOTICE: REST API exposes file data on your local network (localhost:5000)")
+        api_warning.setStyleSheet(
+            "background-color: #FFF3CD; color: #856404; padding: 8px; "
+            "border: 1px solid #FFC107; border-radius: 4px; font-weight: bold;"
+        )
+        api_warning.setWordWrap(True)
+        api_warning.setVisible(False)  # Hidden by default
+        
         self.api_enabled_check = QCheckBox("Enable REST API (localhost:5000)")
+        self.api_enabled_check.setChecked(self.get_setting('api_enabled', False))
         self.api_enabled_check.setToolTip(
             "Starts a local REST API server for integrations with:\n"
             "• n8n\n• Make.com\n• Zapier\n• Custom scripts"
         )
+        self.api_enabled_check.toggled.connect(lambda checked: api_warning.setVisible(checked))
         
         api_docs_button = QPushButton("📖 View API Documentation")
         api_docs_button.clicked.connect(self.open_api_docs)
         api_docs_button.setStyleSheet("background-color: #9C27B0; color: white; padding: 8px;")
         
         automation_layout.addWidget(automation_label)
+        automation_layout.addWidget(api_warning)
         automation_layout.addWidget(self.api_enabled_check)
         automation_layout.addWidget(api_docs_button)
+        
+        # Show warning if already enabled
+        if self.api_enabled_check.isChecked():
+            api_warning.setVisible(True)
+        
         automation_group.setLayout(automation_layout)
         main_layout.addWidget(automation_group)
         
@@ -1533,7 +1572,7 @@ class MainWindow(QMainWindow):
         self.user_profile['settings']['tone'] = self.tone_combo.currentText()
         self.user_profile['settings']['auto_scan'] = self.auto_scan_check.isChecked()
         self.user_profile['settings']['auto_tag'] = self.auto_tag_check.isChecked()
-        self.user_profile['settings']['use_openai'] = self.get_setting('use_openai', False)
+        self.user_profile['settings']['use_openai'] = self.openai_check.isChecked()
         self.user_profile['settings']['openai_api_key'] = self.openai_key_input.text()
         self.user_profile['settings']['api_enabled'] = self.api_enabled_check.isChecked()
         

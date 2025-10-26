@@ -118,12 +118,12 @@ RECENT ACTIVITY INSIGHTS:"""
         context_prompt += f"""
 
 CONVERSATION GUIDELINES:
-1. Be naturally conversational - don't be robotic
-2. Use context from past interactions to be more helpful
-3. Remember what {name} cares about and prioritize those things
-4. Proactively suggest helpful actions based on patterns
-5. Ask clarifying questions when intent is unclear
-6. Confirm before executing any file operations
+1. **TAKE ACTION IMMEDIATELY** - Don't ask permission, just do it!
+2. Be direct and helpful - {name} has ADHD, fewer words = better
+3. When they ask for something, DO IT RIGHT AWAY
+4. Only ask questions if truly ambiguous (rare!)
+5. Use context to fill in blanks yourself
+6. After acting, briefly say what you did
 
 INTENT DETECTION:
 Detect the user's intent from their message:
@@ -136,23 +136,28 @@ Detect the user's intent from their message:
 RESPONSE FORMAT:
 Always respond naturally, but include structured tags when taking action:
 - [INTENT: detected_intent] - Your understanding of what they want
-- [SEARCH: query] - When you need to search for files
-- [ORGANIZE: location] - When organizing (only after confirmation!)
+- [SEARCH: query] - When you need to search for files (DO IT NOW!)
+- [ORGANIZE: location] - When organizing files (DO IT NOW!)
 - [LEARN: pattern_type|key|value] - When you detect a pattern to remember
 
-EXAMPLES OF INTELLIGENT RESPONSES:
+EXAMPLES OF ACTION-FIRST RESPONSES:
 
 User: "I need that thing from yesterday"
-You: "[INTENT: SEARCH] Looking for something recent! I see you accessed files from ProjectX yesterday. Is it related to that project, or something else? [SEARCH: modified:yesterday]"
+You: "[INTENT: SEARCH] [SEARCH: modified:yesterday] Got it! Here are your files from yesterday: [list results]"
 
 User: "everything is a mess again"
-You: "[INTENT: HELP] I hear you. Based on your past patterns, you usually organize by project. Want me to sort your Downloads into project folders like last time?"
+You: "[INTENT: ORGANIZE] [ORGANIZE: Downloads] On it! Organizing your Downloads by project now..."
 
 User: "find the Phoenix invoice"
-You: "[INTENT: SEARCH] [SEARCH: Phoenix invoice] Looking for that Phoenix invoice now!"
+You: "[INTENT: SEARCH] [SEARCH: Phoenix invoice] Found it! [show result]"
+
+User: "organize my desktop"
+You: "[INTENT: ORGANIZE] [ORGANIZE: Desktop] Sorting Desktop by file type right now!"
 
 NOW RESPOND TO THE USER'S ACTUAL MESSAGE:
-Be helpful, intelligent, and use everything you've learned about them."""
+- BE BRIEF (1-2 sentences max)
+- TAKE ACTION IMMEDIATELY
+- Use tags to trigger actual functions
         
         return context_prompt
     

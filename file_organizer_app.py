@@ -891,6 +891,22 @@ class MainWindow(QMainWindow):
         auto_org_group.setLayout(auto_org_layout)
         main_layout.addWidget(auto_org_group)
         
+        # File Management Section
+        files_group = QGroupBox("File Management")
+        files_layout = QVBoxLayout()
+        
+        scan_button = QPushButton("🔍 Scan Downloads Folder")
+        scan_button.clicked.connect(self.scan_downloads)
+        scan_button.setStyleSheet("background-color: #2196F3; color: white; padding: 10px;")
+        
+        stats_label = QLabel("Click to index files in ~/Downloads")
+        stats_label.setStyleSheet("color: #666; font-size: 11px;")
+        
+        files_layout.addWidget(scan_button)
+        files_layout.addWidget(stats_label)
+        files_group.setLayout(files_layout)
+        main_layout.addWidget(files_group)
+        
         # Save Button
         save_button = QPushButton("💾 Save Settings")
         save_button.clicked.connect(self.save_settings)
@@ -908,6 +924,40 @@ class MainWindow(QMainWindow):
         """Get a setting from user profile"""
         settings = self.user_profile.get('settings', {})
         return settings.get(key, default)
+    
+    def scan_downloads(self):
+        """Scan Downloads folder and show progress in Activity Log"""
+        downloads = os.path.expanduser("~/Downloads")
+        
+        # Create indexer with activity log
+        indexer = FileIndexer(self.file_db, self.activity_log)
+        
+        # Log start
+        self.activity_log.add_activity(
+            "Started",
+            "Downloads Scan",
+            "Beginning to scan Downloads folder..."
+        )
+        
+        # Scan folder
+        try:
+            indexed, skipped = indexer.scan_folder(downloads, recursive=False)
+            
+            # Show completion message
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "Scan Complete",
+                f"✅ Indexed {indexed} files\n⏭️ Skipped {skipped} files"
+            )
+        except Exception as e:
+            self.activity_log.add_activity(
+                "Error",
+                "Downloads Scan",
+                f"Failed: {str(e)}"
+            )
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Scan Error", f"Error scanning: {str(e)}")
     
     def save_settings(self):
         """Save all settings"""

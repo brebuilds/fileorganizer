@@ -1120,28 +1120,237 @@ class MainWindow(QMainWindow):
             group.setLayout(group_layout)
             main_layout.addWidget(group)
         
-        # Quick Tips section
-        tips_group = QGroupBox("💡 Quick Tips")
+        features_section.setLayout(features_layout)
+        main_layout.addWidget(features_section)
+        
+        # === SECTION 4: USING THE AI ===
+        ai_section = QGroupBox("🤖 Using the AI Chat")
+        ai_section.setObjectName("ai")
+        self.guide_sections["ai"] = ai_section
+        ai_layout = QVBoxLayout()
+        
+        ai_text = QLabel(
+            "<b>Natural Language Queries:</b><br>"
+            "Just talk naturally! The AI understands intent.<br><br>"
+            
+            "<b>Search Examples:</b><br>"
+            "• 'Find my invoice from last month'<br>"
+            "• 'Show me design files for Phoenix'<br>"
+            "• 'What PDFs do I have about contracts?'<br>"
+            "• 'Files I downloaded yesterday'<br><br>"
+            
+            "<b>Organization Examples:</b><br>"
+            "• 'Organize my desktop by project'<br>"
+            "• 'Move Phoenix files to Documents'<br>"
+            "• 'Clean up my Downloads folder'<br><br>"
+            
+            "<b>Information Examples:</b><br>"
+            "• 'What's taking up space?'<br>"
+            "• 'Show me file statistics'<br>"
+            "• 'What files haven't I opened in months?'<br><br>"
+            
+            "<b>The AI Remembers:</b><br>"
+            "• Your work role and projects<br>"
+            "• Tools you use (Figma, VSCode, etc.)<br>"
+            "• Your file habits<br>"
+            "• Important files you've mentioned<br><br>"
+            
+            "<b>Tips:</b><br>"
+            "• Be specific: 'Phoenix' vs 'that project'<br>"
+            "• Use time words: yesterday, last week, recent<br>"
+            "• Mention file types: PDFs, images, docs<br>"
+            "• The more you chat, the smarter it gets!"
+        )
+        ai_text.setWordWrap(True)
+        ai_text.setStyleSheet("line-height: 1.6; padding: 10px;")
+        ai_layout.addWidget(ai_text)
+        ai_section.setLayout(ai_layout)
+        main_layout.addWidget(ai_section)
+        
+        # === SECTION 5: API REFERENCE ===
+        api_section = QGroupBox("⚙️ API Reference")
+        api_section.setObjectName("api")
+        self.guide_sections["api"] = api_section
+        api_layout = QVBoxLayout()
+        
+        api_text = QLabel(
+            "<b>Enable API:</b> Settings → Automations & APIs → Enable REST API<br>"
+            "<b>Server:</b> http://localhost:5000<br><br>"
+            
+            "<b>Search Files:</b><br>"
+            "<code>GET /api/search?q=invoice&limit=10</code><br><br>"
+            
+            "<b>Semantic Search:</b><br>"
+            "<code>GET /api/semantic-search?q=contracts&limit=5</code><br><br>"
+            
+            "<b>Chat with RAG:</b><br>"
+            "<code>POST /api/chat</code><br>"
+            '<code>{"message": "Find design files", "use_rag": true}</code><br><br>'
+            
+            "<b>Get File Details:</b><br>"
+            "<code>GET /api/file/123</code><br>"
+            "<code>GET /api/file/123/summary</code><br><br>"
+            
+            "<b>Knowledge Graph:</b><br>"
+            "<code>GET /api/graph/file/123/related</code><br>"
+            "<code>GET /api/graph/project/Phoenix/files</code><br><br>"
+            
+            "<b>Use Cases:</b><br>"
+            "• Build custom dashboards<br>"
+            "• Slack/Discord bots<br>"
+            "• n8n/Make.com workflows<br>"
+            "• Mobile apps"
+        )
+        api_text.setWordWrap(True)
+        api_text.setStyleSheet("line-height: 1.6; padding: 10px; font-family: monospace; font-size: 10px;")
+        api_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        api_layout.addWidget(api_text)
+        api_section.setLayout(api_layout)
+        main_layout.addWidget(api_section)
+        
+        # === SECTION 6: USE CASES ===
+        usecases_section = QGroupBox("💡 Real-World Use Cases")
+        usecases_section.setObjectName("usecases")
+        self.guide_sections["usecases"] = usecases_section
+        usecases_layout = QVBoxLayout()
+        
+        usecases_text = QLabel(
+            "<b>1. Designer Workflow</b><br>"
+            "Index: Figma exports, Screenshots, Apple Notes, Google Drive<br>"
+            "Ask: 'Show me all Phoenix brand assets'<br>"
+            "Result: Files across all sources, organized<br><br>"
+            
+            "<b>2. Developer Knowledge Base</b><br>"
+            "Index: Code files, Docs, Apple Notes<br>"
+            "Ask: 'What did I learn about React hooks?'<br>"
+            "Result: Code snippets + notes + articles<br><br>"
+            
+            "<b>3. Client Management</b><br>"
+            "Index: Contracts, Emails, Meeting notes<br>"
+            "Ask: 'What did Acme Corp say about timeline?'<br>"
+            "Result: All client communication<br><br>"
+            
+            "<b>4. Research Assistant</b><br>"
+            "Index: Papers, Highlights, Notes<br>"
+            "Ask: 'Summarize my ML research'<br>"
+            "Result: AI synthesis of all research<br><br>"
+            
+            "<b>5. Automated Workflow (n8n)</b><br>"
+            "New file → Index → AI summary → Slack → Move<br><br>"
+            
+            "<b>6. Personal CRM</b><br>"
+            "Index: Contact info, Meeting notes<br>"
+            "Ask: 'What's my history with John?'<br>"
+            "Result: All interactions with context"
+        )
+        usecases_text.setWordWrap(True)
+        usecases_text.setStyleSheet("line-height: 1.6; padding: 10px;")
+        usecases_layout.addWidget(usecases_text)
+        usecases_section.setLayout(usecases_layout)
+        main_layout.addWidget(usecases_section)
+        
+        # === SECTION 7: TROUBLESHOOTING ===
+        troubleshoot_section = QGroupBox("🆘 Troubleshooting")
+        troubleshoot_section.setObjectName("troubleshoot")
+        self.guide_sections["troubleshoot"] = troubleshoot_section
+        troubleshoot_layout = QVBoxLayout()
+        
+        troubleshoot_text = QLabel(
+            "<b>Problem: No search results</b><br>"
+            "→ Go to Settings and scan folders first!<br><br>"
+            
+            "<b>Problem: Ollama not responding</b><br>"
+            "→ Terminal: <code>ollama serve</code><br><br>"
+            
+            "<b>Problem: Apple Notes shows 0</b><br>"
+            "→ System Preferences → Privacy → Full Disk Access<br><br>"
+            
+            "<b>Problem: API not working</b><br>"
+            "→ Settings → Enable REST API<br><br>"
+            
+            "<b>Problem: Slow performance</b><br>"
+            "→ Settings → Features → Disable unused<br><br>"
+            
+            "<b>Problem: Can't find recent files</b><br>"
+            "→ Re-scan or enable auto-scan<br><br>"
+            
+            "<b>Problem: AI responses not accurate</b><br>"
+            "→ Index more files for better context<br>"
+            "→ Add manual tags to important files<br>"
+            "→ Chat more to train memory<br><br>"
+            
+            "<b>Still stuck?</b><br>"
+            "• Check Activity Log for errors<br>"
+            "• Report: <a href='https://github.com/brebuilds/fileorganizer/issues'>GitHub Issues</a>"
+        )
+        troubleshoot_text.setWordWrap(True)
+        troubleshoot_text.setOpenExternalLinks(True)
+        troubleshoot_text.setStyleSheet("line-height: 1.6; padding: 10px;")
+        troubleshoot_layout.addWidget(troubleshoot_text)
+        troubleshoot_section.setLayout(troubleshoot_layout)
+        main_layout.addWidget(troubleshoot_section)
+        
+        # === SECTION 8: POWER TIPS ===
+        tips_section = QGroupBox("⚡ Power Tips & Tricks")
+        tips_section.setObjectName("tips")
+        self.guide_sections["tips"] = tips_section
         tips_layout = QVBoxLayout()
+        
         tips_text = QLabel(
-            "• Use Settings tab to enable/disable features\n"
-            "• Check Activity Log to see what's happening\n"
-            "• Index folders before searching for files\n"
-            "• Install Ollama for AI features: https://ollama.ai\n"
-            "• Use ./o HELP in terminal for CLI reference\n"
-            "• Hover over checkboxes in Settings for tooltips"
+            "<b>1. Index Apple Notes</b> 🔥<br>"
+            "Your notes = best RAG training data!<br><br>"
+            
+            "<b>2. Enable Auto-Scan</b><br>"
+            "Settings → Auto-scan every hour<br><br>"
+            
+            "<b>3. Use CLI for Speed</b><br>"
+            "<code>./o ?query</code> - Instant search<br>"
+            "<code>./o !yesterday</code> - Temporal filter<br><br>"
+            
+            "<b>4. Set Up Smart Folders</b><br>"
+            "<code>./o SMART</code> - 6 auto-folders<br><br>"
+            
+            "<b>5. Train the AI</b><br>"
+            "Chat about your work<br>"
+            "AI remembers and improves!<br><br>"
+            
+            "<b>6. Use API for Automation</b><br>"
+            "Build workflows with n8n/Zapier<br>"
+            "Create Slack bots<br><br>"
+            
+            "<b>7. Export for Backup</b><br>"
+            "Settings → Export File Structure<br><br>"
+            
+            "<b>8. Connect Cloud Storage</b><br>"
+            "One search across all sources!<br><br>"
+            
+            "<b>9. Privacy First</b><br>"
+            "Keep Ollama for 100% local<br>"
+            "Your data stays on YOUR Mac"
         )
         tips_text.setWordWrap(True)
+        tips_text.setStyleSheet("line-height: 1.6; padding: 10px;")
         tips_layout.addWidget(tips_text)
-        tips_group.setLayout(tips_layout)
-        main_layout.addWidget(tips_group)
+        tips_section.setLayout(tips_layout)
+        main_layout.addWidget(tips_section)
         
         main_layout.addStretch()
         
         guide_widget.setLayout(main_layout)
+        
+        # Store scroll area for jumping
+        self.guide_scroll = scroll
+        
         scroll.setWidget(guide_widget)
         
         return scroll
+    
+    def scroll_to_section(self, section_id):
+        """Scroll to a specific section in the guide"""
+        if section_id in self.guide_sections:
+            section_widget = self.guide_sections[section_id]
+            # Scroll to the section
+            self.guide_scroll.ensureWidgetVisible(section_widget, 50, 50)
     
     def create_settings_tab(self):
         """Create the settings panel"""

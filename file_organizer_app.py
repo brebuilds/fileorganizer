@@ -708,34 +708,20 @@ CONVERSATION STYLE ({tone}):"""
                 response += search_results
         
         if "[INDEX:" in response:
-            # AI wants to index/scan - extract folder
+            # AI wants to index/scan - just acknowledge it
             import re
             import os
             match = re.search(r'\[INDEX:\s*([^\]]+)\]', response)
             if match:
                 folder_path = match.group(1).strip()
+                folder_name = os.path.basename(os.path.expanduser(folder_path))
                 
-                # Expand ~/ to actual home directory
-                folder_path = os.path.expanduser(folder_path)
+                # Remove the [INDEX:] tag and tell user it's happening
+                response = re.sub(r'\[INDEX:[^\]]+\]', '', response).strip()
+                response += f"\n\n⏳ Indexing {folder_name} in background... Check Activity Log for progress!"
                 
-                # Create indexer with activity log
-                indexer = FileIndexer(self.file_db, self.activity_log)
-                
-                try:
-                    # Scan the folder
-                    indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
-                    
-                    index_results = f"\n\n✅ Indexed {os.path.basename(folder_path)}:\n"
-                    index_results += f"• Added: {indexed} files to database\n"
-                    index_results += f"• Skipped: {skipped} files\n"
-                    
-                    # Remove the [INDEX:] tag and add results
-                    response = re.sub(r'\[INDEX:[^\]]+\]', '', response).strip()
-                    response += index_results
-                except Exception as e:
-                    error_msg = f"\n\n❌ Error indexing: {str(e)}"
-                    response = re.sub(r'\[INDEX:[^\]]+\]', '', response).strip()
-                    response += error_msg
+                # Note: Actual indexing should be done via Settings button or CLI
+                # to avoid blocking the chat UI
         
         if "[ORGANIZE:" in response:
             # AI wants to organize - extract type
@@ -842,19 +828,59 @@ class MainWindow(QMainWindow):
         
         main_layout = QVBoxLayout()
         
-        # Assistant Name Section
-        name_group = QGroupBox("Assistant Identity")
-        name_layout = QVBoxLayout()
+        # About You Section
+        about_group = QGroupBox("About You")
+        about_layout = QVBoxLayout()
         
-        name_label = QLabel("Assistant Name:")
+        # Your Name
+        your_name_label = QLabel("Your Name:")
+        self.user_name_input = QLineEdit()
+        self.user_name_input.setText(self.user_profile.get('name', ''))
+        self.user_name_input.setPlaceholderText("What should I call you?")
+        
+        # Your Job/Role
+        job_label = QLabel("What You Do:")
+        self.user_job_input = QLineEdit()
+        self.user_job_input.setText(self.user_profile.get('job', ''))
+        self.user_job_input.setPlaceholderText("e.g., Designer, Developer, Student...")
+        
+        about_layout.addWidget(your_name_label)
+        about_layout.addWidget(self.user_name_input)
+        about_layout.addSpacing(10)
+        about_layout.addWidget(job_label)
+        about_layout.addWidget(self.user_job_input)
+        about_group.setLayout(about_layout)
+        main_layout.addWidget(about_group)
+        
+        # Projects Section
+        projects_group = QGroupBox("Your Projects")
+        projects_layout = QVBoxLayout()
+        
+        projects_label = QLabel("Projects or Clients (one per line):")
+        self.projects_input = QTextEdit()
+        self.projects_input.setMaximumHeight(100)
+        current_projects = self.user_profile.get('projects', [])
+        self.projects_input.setPlainText('\n'.join(current_projects))
+        self.projects_input.setPlaceholderText("Phoenix\nAcme Corp\nPersonal\n...")
+        
+        projects_layout.addWidget(projects_label)
+        projects_layout.addWidget(self.projects_input)
+        projects_group.setLayout(projects_layout)
+        main_layout.addWidget(projects_group)
+        
+        # Assistant Name Section
+        assistant_group = QGroupBox("Assistant Identity")
+        assistant_layout = QVBoxLayout()
+        
+        assistant_label = QLabel("Assistant Name:")
         self.assistant_name_input = QLineEdit()
         self.assistant_name_input.setText(self.get_setting('assistant_name', 'Assistant'))
-        self.assistant_name_input.setPlaceholderText("e.g., Alfred, Jarvis, Helper...")
+        self.assistant_name_input.setPlaceholderText("e.g., Alfred, Jarvis, Poop...")
         
-        name_layout.addWidget(name_label)
-        name_layout.addWidget(self.assistant_name_input)
-        name_group.setLayout(name_layout)
-        main_layout.addWidget(name_group)
+        assistant_layout.addWidget(assistant_label)
+        assistant_layout.addWidget(self.assistant_name_input)
+        assistant_group.setLayout(assistant_layout)
+        main_layout.addWidget(assistant_group)
         
         # Appearance Section
         appearance_group = QGroupBox("Appearance")
@@ -991,6 +1017,14 @@ class MainWindow(QMainWindow):
     
     def save_settings(self):
         """Save all settings"""
+        # Update user profile (About You section)
+        self.user_profile['name'] = self.user_name_input.text()
+        self.user_profile['job'] = self.user_job_input.text()
+        
+        # Update projects
+        projects_text = self.projects_input.toPlainText()
+        self.user_profile['projects'] = [p.strip() for p in projects_text.split('\n') if p.strip()]
+        
         # Update settings in profile
         if 'settings' not in self.user_profile:
             self.user_profile['settings'] = {}
@@ -1010,7 +1044,7 @@ class MainWindow(QMainWindow):
         self.apply_settings()
         
         # Show confirmation
-        QMessageBox.information(self, "Settings Saved", "Your settings have been saved!")
+        QMessageBox.information(self, "Settings Saved", "✅ Your settings have been saved!")
     
     def apply_settings(self):
         """Apply settings to the UI"""
@@ -1061,12 +1095,22 @@ class FileOrganizerApp:
         self.app = QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
         
-        # Check if setup is needed
-        if needs_setup():
-            self.run_setup()
-        
-        # Load user profile
+        # Load user profile (create default if needed)
         self.user_profile = load_user_profile()
+        
+        # Optional: run setup wizard on first launch (can be skipped)
+        if needs_setup():
+            reply = QMessageBox.question(
+                None,
+                "Welcome to File Organizer!",
+                "Would you like to run the setup wizard?\n\n"
+                "You can also skip it and configure everything in Settings.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.run_setup()
+                self.user_profile = load_user_profile()  # Reload after setup
         
         # Main window with profile
         self.window = MainWindow(self.user_profile)

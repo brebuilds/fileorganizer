@@ -660,14 +660,20 @@ class FileDatabase:
 class FileIndexer:
     """Scans folders and indexes files"""
     
-    def __init__(self, db):
+    def __init__(self, db, activity_log=None):
         self.db = db
+        self.activity_log = activity_log
         self.supported_text_extensions = [
             '.txt', '.md', '.py', '.js', '.html', '.css', 
             '.json', '.xml', '.csv', '.log'
         ]
         self.supported_pdf_extensions = ['.pdf']
         self.supported_image_extensions = ['.png', '.jpg', '.jpeg', '.gif']
+    
+    def log_activity(self, action, filename, details):
+        """Log activity to the activity log widget"""
+        if self.activity_log:
+            self.activity_log.add_activity(action, filename, details)
     
     def should_index_file(self, filepath):
         """Determine if file should be indexed"""
@@ -763,10 +769,22 @@ class FileIndexer:
             # Add to database (AI tagging will happen in next step)
             file_id = self.db.add_file(file_info)
             
+            # Log activity
+            self.log_activity(
+                "Indexed",
+                file_info['filename'],
+                f"Added to database (ID: {file_id})"
+            )
+            
             return file_id
             
         except Exception as e:
             print(f"Error indexing {filepath}: {e}")
+            self.log_activity(
+                "Error",
+                os.path.basename(filepath),
+                f"Failed to index: {str(e)}"
+            )
             return None
     
     def scan_folder(self, folder_path, recursive=True):
@@ -776,9 +794,15 @@ class FileIndexer:
         
         if not os.path.exists(folder_path):
             print(f"Folder not found: {folder_path}")
+            self.log_activity("Error", folder_path, "Folder not found")
             return indexed_count, skipped_count
         
         print(f"Scanning: {folder_path}")
+        self.log_activity(
+            "Scan Started",
+            os.path.basename(folder_path),
+            f"Scanning folder {'(recursive)' if recursive else '(non-recursive)'}"
+        )
         
         try:
             if recursive:
@@ -805,6 +829,14 @@ class FileIndexer:
         
         except Exception as e:
             print(f"Error scanning folder {folder_path}: {e}")
+            self.log_activity("Error", os.path.basename(folder_path), f"Scan failed: {str(e)}")
+        
+        # Log completion
+        self.log_activity(
+            "Scan Complete",
+            os.path.basename(folder_path),
+            f"Indexed {indexed_count} files, skipped {skipped_count}"
+        )
         
         return indexed_count, skipped_count
 

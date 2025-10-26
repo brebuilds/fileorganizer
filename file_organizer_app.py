@@ -372,6 +372,13 @@ CONVERSATION STYLE ({tone}):"""
         # Show user message
         self.append_message("You", message)
         
+        # Log activity
+        self.activity_log.add_activity(
+            "Chat Message",
+            "User",
+            message[:50] + ("..." if len(message) > 50 else "")
+        )
+        
         # Add file context if files were dragged
         if self.dragged_files:
             file_context = self.build_file_context()
@@ -648,6 +655,13 @@ CONVERSATION STYLE ({tone}):"""
         response = result.get('response', '')
         intent = result.get('intent', '')
         action = result.get('action', '')
+        
+        # Log AI response activity
+        self.activity_log.add_activity(
+            "AI Response",
+            "Assistant",
+            f"Intent: {intent or 'chat'}" + (f", Action: {action}" if action else "")
+        )
         
         # Add to conversation history (simplified format)
         self.conversation_history.append({"role": "user", "content": self.input_field.text()})

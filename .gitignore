@@ -1,0 +1,88 @@
+# File Organizer .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# App Build Artifacts
+*.app
+*.dmg
+*.pkg
+
+# Database & User Data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+files.db
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# User Config & Data
+.fileorganizer/
+config.json
+vectors.pkl
+exports/
+thumbnails/
+hazel_rules/
+alfred_workflow/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+
+# OS Generated
+Thumbs.db
+ehthumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation builds
+docs/_build/
+
+# Certificates & Keys (IMPORTANT!)
+*.p12
+*.pem
+*.key
+*.cert
+*.cer
+*.mobileprovision
+
+# Distribution
+*.tar.gz
+*.zip
+releases/
+

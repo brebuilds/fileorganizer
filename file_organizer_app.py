@@ -1194,6 +1194,58 @@ class MainWindow(QMainWindow):
         files_group = QGroupBox("File Sources & Indexing")
         files_main_layout = QVBoxLayout()
         
+        # Apple Notes Integration (featured at top)
+        notes_section = QWidget()
+        notes_layout = QHBoxLayout()
+        notes_layout.setContentsMargins(0, 0, 0, 10)
+        
+        notes_icon = QLabel("📝")
+        notes_icon.setStyleSheet("font-size: 24px;")
+        
+        notes_info = QWidget()
+        notes_info_layout = QVBoxLayout()
+        notes_info_layout.setContentsMargins(0, 0, 0, 0)
+        notes_info_layout.setSpacing(2)
+        
+        self.notes_check = QCheckBox("Index Apple Notes")
+        self.notes_check.setStyleSheet("font-weight: bold; font-size: 13px;")
+        
+        # Check if Apple Notes is available
+        from notes_integrator import NotesIntegrator
+        temp_integrator = NotesIntegrator(self.file_db)
+        notes_available = temp_integrator.is_notes_available()
+        
+        if notes_available:
+            stats = temp_integrator.get_stats()
+            notes_desc = QLabel(f"✅ {stats['total']} notes available • Perfect for RAG training!")
+            notes_desc.setStyleSheet("color: #4CAF50; font-size: 11px;")
+            self.notes_check.setEnabled(True)
+            self.notes_check.setChecked(self.get_setting('index_apple_notes', False))
+            self.notes_check.setToolTip(
+                f"Index all your Apple Notes for RAG system\n"
+                f"Total notes: {stats['total']}\n"
+                f"Already indexed: {stats['indexed']}"
+            )
+        else:
+            notes_desc = QLabel("❌ Apple Notes not found on this Mac")
+            notes_desc.setStyleSheet("color: #999; font-size: 11px;")
+            self.notes_check.setEnabled(False)
+            self.notes_check.setToolTip("Apple Notes database not detected")
+        
+        notes_info_layout.addWidget(self.notes_check)
+        notes_info_layout.addWidget(notes_desc)
+        notes_info.setLayout(notes_info_layout)
+        
+        notes_layout.addWidget(notes_icon)
+        notes_layout.addWidget(notes_info, 1)
+        notes_section.setLayout(notes_layout)
+        
+        notes_separator = QLabel()
+        notes_separator.setStyleSheet("border-bottom: 1px solid #ddd; margin: 5px 0;")
+        
+        files_main_layout.addWidget(notes_section)
+        files_main_layout.addWidget(notes_separator)
+        
         # Three-column layout for sources
         sources_layout = QHBoxLayout()
         
@@ -1441,9 +1493,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Scan Error", f"Error scanning: {str(e)}")
     
     def scan_selected_folders(self):
-        """Scan all checked folders (local + cloud)"""
+        """Scan all checked folders (local + cloud + Apple Notes)"""
         # Collect all selected folders
         folders_to_scan = []
+        index_notes = False
         
         # Add local folders
         for folder, check in self.folder_checks.items():
@@ -1457,30 +1510,58 @@ class MainWindow(QMainWindow):
             if check.isChecked() and path and os.path.exists(path):
                 folders_to_scan.append((service, path))
         
-        if not folders_to_scan:
-            QMessageBox.information(self, "No Folders Selected", "Please select at least one folder to scan.")
+        # Check if Apple Notes should be indexed
+        if self.notes_check.isChecked():
+            index_notes = True
+        
+        if not folders_to_scan and not index_notes:
+            QMessageBox.information(self, "No Sources Selected", "Please select at least one source to scan.")
             return
         
+        sources_count = len(folders_to_scan) + (1 if index_notes else 0)
         self.activity_log.add_activity(
             "Started",
             "Batch Scan",
-            f"Scanning {len(folders_to_scan)} folders..."
+            f"Scanning {sources_count} sources..."
         )
         
         total_indexed = 0
         total_skipped = 0
         
-        indexer = FileIndexer(self.file_db, self.activity_log)
+        # Scan folders
+        if folders_to_scan:
+            indexer = FileIndexer(self.file_db, self.activity_log)
+            
+            for folder_name, folder_path in folders_to_scan:
+                indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
+                total_indexed += indexed
+                total_skipped += skipped
         
-        for folder_name, folder_path in folders_to_scan:
-            indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
-            total_indexed += indexed
-            total_skipped += skipped
+        # Index Apple Notes
+        if index_notes:
+            from notes_integrator import NotesIntegrator
+            notes_integrator = NotesIntegrator(self.file_db)
+            
+            self.activity_log.add_activity(
+                "Started",
+                "Apple Notes",
+                "Indexing notes..."
+            )
+            
+            notes_indexed, notes_skipped = notes_integrator.index_notes(self.activity_log)
+            total_indexed += notes_indexed
+            total_skipped += notes_skipped
+            
+            self.activity_log.add_activity(
+                "Complete",
+                "Apple Notes",
+                f"Indexed {notes_indexed} notes, skipped {notes_skipped}"
+            )
         
         QMessageBox.information(
             self,
             "Scan Complete",
-            f"✅ Indexed {total_indexed} files\n⏭️ Skipped {total_skipped} files"
+            f"✅ Indexed {total_indexed} items\n⏭️ Skipped {total_skipped} items"
         )
     
     def export_file_structure(self):
@@ -1575,6 +1656,7 @@ class MainWindow(QMainWindow):
         self.user_profile['settings']['use_openai'] = self.openai_check.isChecked()
         self.user_profile['settings']['openai_api_key'] = self.openai_key_input.text()
         self.user_profile['settings']['api_enabled'] = self.api_enabled_check.isChecked()
+        self.user_profile['settings']['index_apple_notes'] = self.notes_check.isChecked()
         
         # Save feature toggles
         for feature_name, check in self.feature_checks.items():

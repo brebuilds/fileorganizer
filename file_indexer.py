@@ -60,7 +60,9 @@ class FileDatabase:
                 duplicate_of INTEGER,
                 ocr_text TEXT,
                 is_screenshot INTEGER DEFAULT 0,
-                hide_from_app INTEGER DEFAULT 0
+                hide_from_app INTEGER DEFAULT 0,
+                source TEXT DEFAULT 'filesystem',
+                source_id TEXT
             )
         """)
         
@@ -325,7 +327,9 @@ class FileDatabase:
             'duplicate_of': 'INTEGER',
             'ocr_text': 'TEXT',
             'is_screenshot': 'INTEGER DEFAULT 0',
-            'hide_from_app': 'INTEGER DEFAULT 0'
+            'hide_from_app': 'INTEGER DEFAULT 0',
+            'source': 'TEXT DEFAULT "filesystem"',
+            'source_id': 'TEXT'
         }
         
         for col_name, col_type in new_columns.items():

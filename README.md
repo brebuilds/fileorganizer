@@ -1,12 +1,95 @@
-# 🗂️ ADHD-Friendly File Organizer v4.0
+# 🗂️ Personal RAG System & File Organizer v4.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![macOS](https://img.shields.io/badge/macOS-15.0+-000000.svg)](https://www.apple.com/macos/)
+[![RAG](https://img.shields.io/badge/RAG-Enabled-brightgreen.svg)](https://github.com/brebuilds/fileorganizer)
 
-**The most comprehensive AI-powered file organizer built specifically for ADHD brains!** 🧠✨
+**A complete RAG (Retrieval-Augmented Generation) system for your personal files!** 🧠✨
 
-An intelligent macOS menu bar app that uses AI to help you find and organize files through natural conversation. Never lose a file again with smart reminders, auto-organization, and powerful search capabilities.
+Built specifically for ADHD brains, but powerful enough for developers. This isn't just a file organizer - it's a **local-first, privacy-focused RAG system** that indexes, understands, and remembers everything about your files. Use it as a personal assistant or integrate it into your own applications via REST API.
+
+---
+
+## 🤖 Why This is a RAG System
+
+**RAG (Retrieval-Augmented Generation)** combines retrieval of relevant documents with AI generation for accurate, context-aware responses. This app is a complete RAG implementation:
+
+### Core RAG Components ✅
+
+1. **Document Ingestion & Indexing**
+   - Multi-format support (PDF, TXT, MD, code files, images with OCR)
+   - **Apple Notes integration** - Index all your notes for RAG! 📝
+   - Full-text search with SQLite FTS5
+   - Automatic metadata extraction
+   - Cloud storage integration (Dropbox, iCloud Drive, Google Drive, OneDrive)
+
+2. **Vector Embeddings & Semantic Search**
+   - `vector_store.py` - Generate embeddings for semantic search
+   - Find files by *meaning*, not just keywords
+   - "Find documents about machine learning" works even if files don't contain those exact words
+
+3. **Knowledge Graph**
+   - `graph_store.py` - Track relationships between files, projects, and tags
+   - Understand context: "Show files related to the Phoenix project"
+   - Automatic relationship discovery
+
+4. **Retrieval System**
+   - Multiple search strategies: keyword, semantic, temporal, graph-based
+   - Hybrid search combining multiple methods
+   - Ranked results with relevance scoring
+
+5. **AI Generation Layer**
+   - Local AI with Ollama (privacy-first)
+   - Optional OpenAI integration for advanced summaries
+   - Context-aware responses using retrieved documents
+   - Learns user preferences over time
+
+6. **Memory & Learning**
+   - `learned_patterns` database stores user context
+   - Remembers work habits, preferences, projects
+   - Gets more personalized over time
+
+7. **REST API for Integration**
+   - Query your files programmatically
+   - Build custom apps on top of your personal knowledge base
+   - Integrate with automation tools (n8n, Zapier, Make.com)
+
+### What Makes This RAG Unique? 🌟
+
+- **Local-First & Private** - All data stays on your machine (unless you enable OpenAI)
+- **ADHD-Optimized** - Designed for actual human workflows, not just demos
+- **Temporal Awareness** - "What did I work on yesterday?" 
+- **Multi-Modal** - Text, PDFs, images (with OCR), code files
+- **Relationship Tracking** - Understands file connections and context
+- **Learning System** - Improves with use, like a real assistant
+- **Production-Ready** - Not a POC, a complete working system
+
+### Use Cases
+
+**For Personal Use:**
+- "Find that invoice I got last month"
+- "What files am I forgetting about?"
+- "Organize all Phoenix project files"
+
+**For Developers (via API):**
+```bash
+# Search your knowledge base
+curl http://localhost:5000/api/search?q=machine+learning
+
+# Get file summary
+curl http://localhost:5000/api/file/123/summary
+
+# Query with AI
+curl -X POST http://localhost:5000/api/chat \
+  -d '{"message": "What are my most recent design files?"}'
+```
+
+**Build on Top:**
+- Custom dashboards for your files
+- Slack/Discord bots that query your knowledge base
+- Automated workflows triggered by file events
+- Mobile apps that access your files
 
 ---
 

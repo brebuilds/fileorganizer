@@ -881,26 +881,139 @@ class MainWindow(QMainWindow):
         return cloud_paths
     
     def create_guide_tab(self):
-        """Create the guide/tips tab"""
+        """Create the comprehensive guide tab with sections"""
         guide_widget = QWidget()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
         main_layout = QVBoxLayout()
         
         # Header
-        header = QLabel("📚 File Organizer v4.0 - Complete Guide")
-        header.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px 0;")
+        header = QLabel("📚 Complete Guide & Documentation")
+        header.setStyleSheet("font-size: 20px; font-weight: bold; margin: 10px 0;")
         main_layout.addWidget(header)
         
-        intro = QLabel(
-            "Welcome to your ADHD-friendly file organizer! Here's everything you can do:"
-        )
-        intro.setWordWrap(True)
-        intro.setStyleSheet("color: #666; margin-bottom: 20px;")
-        main_layout.addWidget(intro)
+        subtitle = QLabel("Your Personal RAG System • Everything in One Place")
+        subtitle.setStyleSheet("color: #666; font-size: 12px; margin-bottom: 15px;")
+        subtitle.setWordWrap(True)
+        main_layout.addWidget(subtitle)
         
-        # Feature guides
+        # Quick Jump Links Section
+        jump_group = QGroupBox("⚡ Quick Jump")
+        jump_layout = QVBoxLayout()
+        jump_layout.setSpacing(5)
+        
+        sections = [
+            ("🚀 Quick Start", "quickstart"),
+            ("🎯 What is RAG?", "rag"),
+            ("✨ All Features", "features"),
+            ("🤖 Using the AI", "ai"),
+            ("⚙️ API Reference", "api"),
+            ("💡 Use Cases", "usecases"),
+            ("🆘 Troubleshooting", "troubleshoot"),
+            ("⚡ Power Tips", "tips")
+        ]
+        
+        for label, section_id in sections:
+            btn = QPushButton(label)
+            btn.setStyleSheet(
+                "text-align: left; padding: 8px; background-color: #f5f5f5; "
+                "border: 1px solid #ddd; border-radius: 4px;"
+            )
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda checked, sid=section_id: self.scroll_to_section(sid))
+            jump_layout.addWidget(btn)
+        
+        jump_group.setLayout(jump_layout)
+        main_layout.addWidget(jump_group)
+        
+        # Separator
+        separator = QLabel()
+        separator.setStyleSheet("border-top: 2px solid #ddd; margin: 15px 0;")
+        main_layout.addWidget(separator)
+        
+        # Store section widgets for scrolling
+        self.guide_sections = {}
+        
+        # === SECTION 1: QUICK START ===
+        quickstart_section = QGroupBox("🚀 Quick Start (5 Minutes)")
+        quickstart_section.setObjectName("quickstart")
+        self.guide_sections["quickstart"] = quickstart_section
+        quickstart_layout = QVBoxLayout()
+        
+        quickstart_text = QLabel(
+            "<b>Step 1: Install Ollama</b> (2 min)<br>"
+            "Download from <a href='https://ollama.ai'>ollama.ai</a><br>"
+            "Then run: <code>ollama pull llama2</code><br><br>"
+            
+            "<b>Step 2: Index Your Files</b> (1 min)<br>"
+            "• Go to ⚙️ Settings tab<br>"
+            "• Check: Downloads, Documents, Apple Notes<br>"
+            "• Click: 🔍 Scan Selected Folders<br><br>"
+            
+            "<b>Step 3: Try Your First Query</b> (30 sec)<br>"
+            "Go to 💬 Chat and ask:<br>"
+            "• 'What files did I download yesterday?'<br>"
+            "• 'Find documents about invoices'<br>"
+            "• 'Show me design files'<br><br>"
+            
+            "<b>Done! You're ready to use your personal RAG system!</b>"
+        )
+        quickstart_text.setWordWrap(True)
+        quickstart_text.setOpenExternalLinks(True)
+        quickstart_text.setStyleSheet("line-height: 1.6; padding: 10px;")
+        quickstart_layout.addWidget(quickstart_text)
+        quickstart_section.setLayout(quickstart_layout)
+        main_layout.addWidget(quickstart_section)
+        
+        # === SECTION 2: WHAT IS RAG? ===
+        rag_section = QGroupBox("🎯 What is RAG? (Retrieval-Augmented Generation)")
+        rag_section.setObjectName("rag")
+        self.guide_sections["rag"] = rag_section
+        rag_layout = QVBoxLayout()
+        
+        rag_text = QLabel(
+            "<b>This isn't just a file organizer - it's a complete RAG system!</b><br><br>"
+            
+            "<b>What is RAG?</b><br>"
+            "RAG = <b>Retrieval</b> (finding relevant files) + <b>Generation</b> (AI responses)<br><br>"
+            
+            "<b>How It Works:</b><br>"
+            "1️⃣ You ask: 'Find Phoenix project files from last week'<br>"
+            "2️⃣ System searches: 3 databases simultaneously<br>"
+            "   • Keyword search (exact matches)<br>"
+            "   • Vector search (semantic meaning)<br>"
+            "   • Knowledge graph (relationships)<br>"
+            "3️⃣ AI generates: Natural response with context<br>"
+            "4️⃣ System learns: Remembers your patterns<br><br>"
+            
+            "<b>Why RAG is Better:</b><br>"
+            "✅ Grounded in YOUR actual data<br>"
+            "✅ No AI hallucination<br>"
+            "✅ Learns your workflow<br>"
+            "✅ 100% local & private (with Ollama)<br>"
+            "✅ Works offline<br><br>"
+            
+            "<b>What Makes This RAG Unique:</b><br>"
+            "• Multi-modal: Files, PDFs, images, Apple Notes<br>"
+            "• Temporal aware: 'files from yesterday'<br>"
+            "• Relationship tracking: project connections<br>"
+            "• User memory: learns about YOU<br>"
+            "• Production ready: not a demo!"
+        )
+        rag_text.setWordWrap(True)
+        rag_text.setStyleSheet("line-height: 1.6; padding: 10px;")
+        rag_layout.addWidget(rag_text)
+        rag_section.setLayout(rag_layout)
+        main_layout.addWidget(rag_section)
+        
+        # === SECTION 3: ALL FEATURES ===
+        features_section = QGroupBox("✨ All Features")
+        features_section.setObjectName("features")
+        self.guide_sections["features"] = features_section
+        features_layout = QVBoxLayout()
+        
         features_guide = [
             ("💬 Chat with Your Files", 
              "Natural language interface to find and organize files",
@@ -1720,6 +1833,32 @@ class FileOrganizerApp:
     def __init__(self):
         self.app = QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
+        
+        # Set application-wide font to Roboto Condensed
+        font = QFont("Roboto Condensed", 10)
+        font.setStyleHint(QFont.StyleHint.SansSerif)
+        self.app.setFont(font)
+        
+        # Set application stylesheet for consistent Roboto Condensed usage
+        self.app.setStyleSheet("""
+            * {
+                font-family: "Roboto Condensed", -apple-system, BlinkMacSystemFont, sans-serif;
+            }
+            QGroupBox {
+                font-family: "Roboto Condensed", sans-serif;
+                font-weight: 600;
+            }
+            QPushButton {
+                font-family: "Roboto Condensed", sans-serif;
+                font-weight: 500;
+            }
+            QLabel {
+                font-family: "Roboto Condensed", sans-serif;
+            }
+            QLineEdit, QTextEdit, QComboBox {
+                font-family: "Roboto Condensed", sans-serif;
+            }
+        """)
         
         # Load user profile (create default if needed)
         self.user_profile = load_user_profile()

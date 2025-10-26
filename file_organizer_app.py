@@ -707,6 +707,36 @@ CONVERSATION STYLE ({tone}):"""
                 response = re.sub(r'\[SEARCH:[^\]]+\]', '', response).strip()
                 response += search_results
         
+        if "[INDEX:" in response:
+            # AI wants to index/scan - extract folder
+            import re
+            import os
+            match = re.search(r'\[INDEX:\s*([^\]]+)\]', response)
+            if match:
+                folder_path = match.group(1).strip()
+                
+                # Expand ~/ to actual home directory
+                folder_path = os.path.expanduser(folder_path)
+                
+                # Create indexer with activity log
+                indexer = FileIndexer(self.file_db, self.activity_log)
+                
+                try:
+                    # Scan the folder
+                    indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
+                    
+                    index_results = f"\n\n✅ Indexed {os.path.basename(folder_path)}:\n"
+                    index_results += f"• Added: {indexed} files to database\n"
+                    index_results += f"• Skipped: {skipped} files\n"
+                    
+                    # Remove the [INDEX:] tag and add results
+                    response = re.sub(r'\[INDEX:[^\]]+\]', '', response).strip()
+                    response += index_results
+                except Exception as e:
+                    error_msg = f"\n\n❌ Error indexing: {str(e)}"
+                    response = re.sub(r'\[INDEX:[^\]]+\]', '', response).strip()
+                    response += error_msg
+        
         if "[ORGANIZE:" in response:
             # AI wants to organize - extract type
             import re

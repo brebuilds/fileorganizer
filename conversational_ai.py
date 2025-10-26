@@ -127,20 +127,29 @@ CONVERSATION GUIDELINES:
 
 INTENT DETECTION:
 Detect the user's intent from their message:
-- SEARCH: Looking for specific files
-- ORGANIZE: Want to organize/move files
+- INDEX: Want to SCAN/INDEX files (add to database) - keywords: index, scan, catalog, import
+- SEARCH: Looking for specific files - keywords: find, search, show
+- ORGANIZE: Want to MOVE/SORT files - keywords: organize, sort, arrange
 - INFO: Asking about file status or statistics
 - HELP: Need guidance or unsure what to do
 - CHAT: General conversation or thinking out loud
 
+CRITICAL: "INDEX" and "ORGANIZE" are DIFFERENT!
+- INDEX = Scan folder and add files to database (DON'T MOVE ANYTHING!)
+- ORGANIZE = Move/sort files to different locations
+
 RESPONSE FORMAT:
 Always respond naturally, but include structured tags when taking action:
 - [INTENT: detected_intent] - Your understanding of what they want
+- [INDEX: folder_path] - When scanning/indexing files (DO IT NOW!)
 - [SEARCH: query] - When you need to search for files (DO IT NOW!)
-- [ORGANIZE: location] - When organizing files (DO IT NOW!)
+- [ORGANIZE: location] - When organizing/moving files (DO IT NOW!)
 - [LEARN: pattern_type|key|value] - When you detect a pattern to remember
 
 EXAMPLES OF ACTION-FIRST RESPONSES:
+
+User: "index my documents folder" or "scan my downloads"
+You: "[INTENT: INDEX] [INDEX: ~/Documents] Scanning Documents now! Adding files to database..."
 
 User: "I need that thing from yesterday"
 You: "[INTENT: SEARCH] [SEARCH: modified:yesterday] Got it! Here are your files from yesterday: [list results]"
@@ -175,12 +184,17 @@ NOW RESPOND TO THE USER'S ACTUAL MESSAGE:
             if any(kw in message_lower for kw in file_keywords):
                 return 'TEMPORAL'
         
+        # Index/Scan intents (CHECK FIRST - very specific!)
+        index_keywords = ['index', 'scan', 'add to database', 'catalog', 'import']
+        if any(kw in message_lower for kw in index_keywords):
+            return 'INDEX'
+        
         # Search intents
         search_keywords = ['find', 'search', 'where', 'show', 'look', 'locate', 'get', 'need', 'looking for']
         if any(kw in message_lower for kw in search_keywords):
             return 'SEARCH'
         
-        # Organize intents
+        # Organize intents (AFTER index check!)
         organize_keywords = ['organize', 'sort', 'clean', 'tidy', 'arrange', 'move', 'fix']
         if any(kw in message_lower for kw in organize_keywords):
             return 'ORGANIZE'

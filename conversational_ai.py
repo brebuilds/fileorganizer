@@ -157,7 +157,7 @@ You: "[INTENT: ORGANIZE] [ORGANIZE: Desktop] Sorting Desktop by file type right 
 NOW RESPOND TO THE USER'S ACTUAL MESSAGE:
 - BE BRIEF (1-2 sentences max)
 - TAKE ACTION IMMEDIATELY
-- Use tags to trigger actual functions
+- Use tags to trigger actual functions"""
         
         return context_prompt
     

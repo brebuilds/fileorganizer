@@ -838,17 +838,8 @@ class MainWindow(QMainWindow):
         self.user_name_input.setText(self.user_profile.get('name', ''))
         self.user_name_input.setPlaceholderText("What should I call you?")
         
-        # Your Job/Role
-        job_label = QLabel("What You Do:")
-        self.user_job_input = QLineEdit()
-        self.user_job_input.setText(self.user_profile.get('job', ''))
-        self.user_job_input.setPlaceholderText("e.g., Designer, Developer, Student...")
-        
         about_layout.addWidget(your_name_label)
         about_layout.addWidget(self.user_name_input)
-        about_layout.addSpacing(10)
-        about_layout.addWidget(job_label)
-        about_layout.addWidget(self.user_job_input)
         about_group.setLayout(about_layout)
         main_layout.addWidget(about_group)
         
@@ -857,13 +848,17 @@ class MainWindow(QMainWindow):
         projects_layout = QVBoxLayout()
         
         projects_label = QLabel("Projects or Clients (one per line):")
+        projects_hint = QLabel("💡 Tip: Add details in parentheses for more context")
+        projects_hint.setStyleSheet("color: #666; font-size: 11px; font-style: italic;")
+        
         self.projects_input = QTextEdit()
         self.projects_input.setMaximumHeight(100)
         current_projects = self.user_profile.get('projects', [])
         self.projects_input.setPlainText('\n'.join(current_projects))
-        self.projects_input.setPlaceholderText("Phoenix\nAcme Corp\nPersonal\n...")
+        self.projects_input.setPlaceholderText("Phoenix (new website redesign)\nAcme Corp (ongoing consulting)\nPersonal (side projects)")
         
         projects_layout.addWidget(projects_label)
+        projects_layout.addWidget(projects_hint)
         projects_layout.addWidget(self.projects_input)
         projects_group.setLayout(projects_layout)
         main_layout.addWidget(projects_group)
@@ -936,11 +931,19 @@ class MainWindow(QMainWindow):
         auto_org_group = QGroupBox("Auto-Organization")
         auto_org_layout = QVBoxLayout()
         
-        self.auto_scan_check = QCheckBox("Auto-scan for new files every hour")
+        self.auto_scan_check = QCheckBox("⓿ Auto-scan for new files every hour")
         self.auto_scan_check.setChecked(self.get_setting('auto_scan', False))
+        self.auto_scan_check.setToolTip(
+            "Automatically scans your monitored folders every hour and adds new files to the database.\n"
+            "This keeps your file index up-to-date without manual scanning."
+        )
         
-        self.auto_tag_check = QCheckBox("Auto-tag new files with AI")
+        self.auto_tag_check = QCheckBox("ⓘ Auto-tag new files with AI")
         self.auto_tag_check.setChecked(self.get_setting('auto_tag', False))
+        self.auto_tag_check.setToolTip(
+            "Uses AI to automatically analyze and tag new files with relevant keywords.\n"
+            "Makes files easier to search and organize by project/category."
+        )
         
         auto_org_layout.addWidget(self.auto_scan_check)
         auto_org_layout.addWidget(self.auto_tag_check)
@@ -948,20 +951,151 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(auto_org_group)
         
         # File Management Section
-        files_group = QGroupBox("File Management")
-        files_layout = QVBoxLayout()
+        files_group = QGroupBox("File Sources & Indexing")
+        files_main_layout = QVBoxLayout()
         
-        scan_button = QPushButton("🔍 Scan Downloads Folder")
-        scan_button.clicked.connect(self.scan_downloads)
-        scan_button.setStyleSheet("background-color: #2196F3; color: white; padding: 10px;")
+        # Three-column layout for sources
+        sources_layout = QHBoxLayout()
         
-        stats_label = QLabel("Click to index files in ~/Downloads")
-        stats_label.setStyleSheet("color: #666; font-size: 11px;")
+        # Column 1: Local Folders
+        local_group = QWidget()
+        local_layout = QVBoxLayout()
+        local_header = QLabel("📁 Local Folders")
+        local_header.setStyleSheet("font-weight: bold; font-size: 13px;")
+        local_layout.addWidget(local_header)
         
-        files_layout.addWidget(scan_button)
-        files_layout.addWidget(stats_label)
-        files_group.setLayout(files_layout)
+        self.folder_checks = {}
+        local_folders = ['Downloads', 'Documents', 'Desktop', 'Pictures']
+        for folder in local_folders:
+            check = QCheckBox(folder)
+            check.setChecked(folder in self.user_profile.get('monitored_folders', []))
+            self.folder_checks[folder] = check
+            local_layout.addWidget(check)
+        
+        local_layout.addStretch()
+        local_group.setLayout(local_layout)
+        sources_layout.addWidget(local_group)
+        
+        # Column 2: Cloud Storage
+        cloud_group = QWidget()
+        cloud_layout = QVBoxLayout()
+        cloud_header = QLabel("☁️ Cloud Storage")
+        cloud_header.setStyleSheet("font-weight: bold; font-size: 13px;")
+        cloud_layout.addWidget(cloud_header)
+        
+        self.cloud_checks = {}
+        cloud_services = ['Dropbox', 'iCloud Drive', 'Google Drive', 'OneDrive']
+        for service in cloud_services:
+            check = QCheckBox(service)
+            check.setEnabled(False)  # Will enable when detected
+            check.setToolTip(f"{service} folder will be auto-detected if installed")
+            self.cloud_checks[service] = check
+            cloud_layout.addWidget(check)
+        
+        cloud_layout.addStretch()
+        cloud_group.setLayout(cloud_layout)
+        sources_layout.addWidget(cloud_group)
+        
+        # Column 3: External Tools
+        tools_group = QWidget()
+        tools_layout = QVBoxLayout()
+        tools_header = QLabel("🔧 External Tools")
+        tools_header.setStyleSheet("font-weight: bold; font-size: 13px;")
+        tools_layout.addWidget(tools_header)
+        
+        self.tool_checks = {}
+        external_tools = ['Alfred', 'Raycast', 'DevonThink', 'Hazel']
+        for tool in external_tools:
+            check = QCheckBox(tool)
+            check.setToolTip(f"Enable {tool} integration")
+            self.tool_checks[tool] = check
+            tools_layout.addWidget(check)
+        
+        tools_layout.addStretch()
+        tools_group.setLayout(tools_layout)
+        sources_layout.addWidget(tools_group)
+        
+        files_main_layout.addLayout(sources_layout)
+        
+        # Quick action buttons
+        buttons_layout = QHBoxLayout()
+        scan_button = QPushButton("🔍 Scan Selected Folders")
+        scan_button.clicked.connect(self.scan_selected_folders)
+        scan_button.setStyleSheet("background-color: #2196F3; color: white; padding: 8px;")
+        buttons_layout.addWidget(scan_button)
+        files_main_layout.addLayout(buttons_layout)
+        
+        files_group.setLayout(files_main_layout)
         main_layout.addWidget(files_group)
+        
+        # OpenAI Integration Section
+        openai_group = QGroupBox("🤖 AI Enhancements")
+        openai_layout = QVBoxLayout()
+        
+        openai_check = QCheckBox("Enable OpenAI for enhanced summaries")
+        openai_check.setToolTip(
+            "Use OpenAI API for better file summaries and content analysis.\n"
+            "Requires OpenAI API key (costs apply)."
+        )
+        openai_check.setChecked(self.get_setting('use_openai', False))
+        
+        openai_key_label = QLabel("OpenAI API Key:")
+        self.openai_key_input = QLineEdit()
+        self.openai_key_input.setText(self.get_setting('openai_api_key', ''))
+        self.openai_key_input.setPlaceholderText("sk-...")
+        self.openai_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        
+        openai_layout.addWidget(openai_check)
+        openai_layout.addWidget(openai_key_label)
+        openai_layout.addWidget(self.openai_key_input)
+        openai_group.setLayout(openai_layout)
+        main_layout.addWidget(openai_group)
+        
+        # Automations & APIs Section
+        automation_group = QGroupBox("🔄 Automations & APIs")
+        automation_layout = QVBoxLayout()
+        
+        automation_label = QLabel("Enable external automation and API access:")
+        
+        self.api_enabled_check = QCheckBox("Enable REST API (localhost:5000)")
+        self.api_enabled_check.setToolTip(
+            "Starts a local REST API server for integrations with:\n"
+            "• n8n\n• Make.com\n• Zapier\n• Custom scripts"
+        )
+        
+        api_docs_button = QPushButton("📖 View API Documentation")
+        api_docs_button.clicked.connect(self.open_api_docs)
+        api_docs_button.setStyleSheet("background-color: #9C27B0; color: white; padding: 8px;")
+        
+        automation_layout.addWidget(automation_label)
+        automation_layout.addWidget(self.api_enabled_check)
+        automation_layout.addWidget(api_docs_button)
+        automation_group.setLayout(automation_layout)
+        main_layout.addWidget(automation_group)
+        
+        # Data Management Section
+        data_group = QGroupBox("📊 Data Management")
+        data_layout = QVBoxLayout()
+        
+        # Export button
+        export_button = QPushButton("📤 Export File Structure Map")
+        export_button.clicked.connect(self.export_file_structure)
+        export_button.setStyleSheet("background-color: #FF9800; color: white; padding: 10px;")
+        
+        export_note = QLabel("⚠️ Only exports indexed files. Scan your folders first!")
+        export_note.setStyleSheet("color: #666; font-size: 11px; font-style: italic;")
+        
+        # Database link
+        db_button = QPushButton("🗄️ View Database Files")
+        db_button.clicked.connect(self.open_database_folder)
+        db_button.setStyleSheet("background-color: #607D8B; color: white; padding: 10px;")
+        
+        data_layout.addWidget(export_button)
+        data_layout.addWidget(export_note)
+        data_layout.addSpacing(10)
+        data_layout.addWidget(db_button)
+        data_group.setLayout(data_layout)
+        main_layout.addWidget(data_group)
         
         # Save Button
         save_button = QPushButton("💾 Save Settings")
@@ -1015,15 +1149,104 @@ class MainWindow(QMainWindow):
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Scan Error", f"Error scanning: {str(e)}")
     
+    def scan_selected_folders(self):
+        """Scan all checked folders"""
+        selected_folders = [folder for folder, check in self.folder_checks.items() if check.isChecked()]
+        
+        if not selected_folders:
+            QMessageBox.information(self, "No Folders Selected", "Please select at least one folder to scan.")
+            return
+        
+        self.activity_log.add_activity(
+            "Started",
+            "Batch Scan",
+            f"Scanning {len(selected_folders)} folders..."
+        )
+        
+        total_indexed = 0
+        total_skipped = 0
+        
+        indexer = FileIndexer(self.file_db, self.activity_log)
+        
+        for folder in selected_folders:
+            folder_path = os.path.expanduser(f"~/{folder}")
+            if os.path.exists(folder_path):
+                indexed, skipped = indexer.scan_folder(folder_path, recursive=False)
+                total_indexed += indexed
+                total_skipped += skipped
+        
+        QMessageBox.information(
+            self,
+            "Scan Complete",
+            f"✅ Indexed {total_indexed} files\n⏭️ Skipped {total_skipped} files"
+        )
+    
+    def export_file_structure(self):
+        """Export file structure to CSV/JSON"""
+        from export_manager import ExportManager
+        
+        exporter = ExportManager(self.file_db)
+        
+        # Ask user for format
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Export Format",
+            "Choose export format:\n\nYes = CSV\nNo = JSON",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        format_type = 'csv' if reply == QMessageBox.StandardButton.Yes else 'json'
+        
+        try:
+            output_path = exporter.export_full_catalog(format=format_type)
+            QMessageBox.information(
+                self,
+                "Export Complete",
+                f"✅ Exported to:\n{output_path}"
+            )
+            # Open folder
+            os.system(f'open "{os.path.dirname(output_path)}"')
+        except Exception as e:
+            QMessageBox.warning(self, "Export Error", f"Error exporting: {str(e)}")
+    
+    def open_database_folder(self):
+        """Open the database folder in Finder"""
+        db_folder = os.path.expanduser("~/.fileorganizer")
+        if os.path.exists(db_folder):
+            os.system(f'open "{db_folder}"')
+        else:
+            QMessageBox.information(self, "Database Folder", f"Database folder: {db_folder}\n\nNot created yet - index some files first!")
+    
+    def open_api_docs(self):
+        """Open API documentation"""
+        docs_path = os.path.join(os.path.dirname(__file__), "ADVANCED_FEATURES.md")
+        if os.path.exists(docs_path):
+            os.system(f'open "{docs_path}"')
+        else:
+            QMessageBox.information(
+                self, 
+                "API Documentation",
+                "API Server runs on http://localhost:5000\n\n"
+                "Endpoints:\n"
+                "• GET /api/search?q=query\n"
+                "• POST /api/organize\n"
+                "• POST /api/tag\n\n"
+                "See ADVANCED_FEATURES.md for details"
+            )
+    
     def save_settings(self):
         """Save all settings"""
         # Update user profile (About You section)
         self.user_profile['name'] = self.user_name_input.text()
-        self.user_profile['job'] = self.user_job_input.text()
         
         # Update projects
         projects_text = self.projects_input.toPlainText()
         self.user_profile['projects'] = [p.strip() for p in projects_text.split('\n') if p.strip()]
+        
+        # Update monitored folders
+        monitored = [folder for folder, check in self.folder_checks.items() if check.isChecked()]
+        self.user_profile['monitored_folders'] = monitored
         
         # Update settings in profile
         if 'settings' not in self.user_profile:
@@ -1036,6 +1259,9 @@ class MainWindow(QMainWindow):
         self.user_profile['settings']['tone'] = self.tone_combo.currentText()
         self.user_profile['settings']['auto_scan'] = self.auto_scan_check.isChecked()
         self.user_profile['settings']['auto_tag'] = self.auto_tag_check.isChecked()
+        self.user_profile['settings']['use_openai'] = self.get_setting('use_openai', False)
+        self.user_profile['settings']['openai_api_key'] = self.openai_key_input.text()
+        self.user_profile['settings']['api_enabled'] = self.api_enabled_check.isChecked()
         
         # Save to file
         save_user_profile(self.user_profile)
